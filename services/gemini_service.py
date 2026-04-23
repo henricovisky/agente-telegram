@@ -44,7 +44,7 @@ class GeminiService:
                 return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
             except Exception as e:
                 msg = str(e)
-                if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                if any(err in msg for err in ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE"]):
                     tentativa += 1
                     
                     # Backoff exponencial base
@@ -59,10 +59,11 @@ class GeminiService:
                         except ValueError:
                             pass
                             
-                    logger.warning(f"Rate Limit (429) excedido. Tentativa {tentativa}/{self.MAX_RETRIES}. Aguardando {espera:.1f}s...")
+                    tipo_erro = "Rate Limit (429)" if "429" in msg else "Service Unavailable (503)"
+                    logger.warning(f"{tipo_erro} detectado. Tentativa {tentativa}/{self.MAX_RETRIES}. Aguardando {espera:.1f}s...")
                     
                     if tentativa >= self.MAX_RETRIES:
-                        raise RuntimeError(f"Quota do Gemini excedida após {self.MAX_RETRIES} tentativas.")
+                        raise RuntimeError(f"O Gemini falhou após {self.MAX_RETRIES} tentativas devido a: {msg}")
                         
                     await asyncio.sleep(espera)
                 else:
