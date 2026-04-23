@@ -14,8 +14,8 @@ class GeminiService:
     transcrição de áudio e geração da crônica épica de RPG.
     """
     # Modelos atualizados para a nova SDK
-    MODELO_TRANSCRICAO = 'gemini-2.0-flash'
-    MODELO_CRONICA = 'gemini-2.0-flash'
+    MODELO_TRANSCRICAO = 'gemini-2.5-flash-lite'
+    MODELO_CRONICA = 'gemini-2.5-flash-lite'
 
     # Intervalo de espera base (em segundos)
     INTERVALO_ESPERA_SEGUNDOS = 30
@@ -135,13 +135,105 @@ class GeminiService:
     async def gerar_cronica_epica(self, transcricao: str) -> str:
         """
         Gera uma crônica épica de RPG em Markdown usando o modelo Gemini.
+        Utiliza RAG (Retrieval-Augmented Generation) para reduzir textos longos
+        e poupar tokens.
         """
         logger.info(f"Gerando a Crônica Épica com o modelo {self.MODELO_CRONICA}...")
+        
+        loop = asyncio.get_running_loop()
+        
+        # --- Lógica de RAG para reduzir tamanho da transcrição ---
+        LIMITE_CARACTERES = 15000
+        if len(transcricao) > LIMITE_CARACTERES:
+            logger.info(f"Transcrição longa ({len(transcricao)} caracteres). Iniciando processo RAG para redução...")
+            
+            import textwrap
+            import math
+            
+            def _get_cosine_similarity(v1, v2):
+                dot = sum(a * b for a, b in zip(v1, v2))
+                norm1 = math.sqrt(sum(a * a for a in v1))
+                norm2 = math.sqrt(sum(b * b for b in v2))
+                if norm1 == 0 or norm2 == 0: return 0.0
+                return dot / (norm1 * norm2)
+            
+            # 1. Divisão em chunks
+            chunks = textwrap.wrap(transcricao, width=1500, break_long_words=False, replace_whitespace=False)
+            logger.info(f"Texto dividido em {len(chunks)} chunks. Gerando embeddings...")
+            
+            def _embed(texts):
+                return self.client.models.embed_content(
+                    model='gemini-embedding-001',
+                    contents=texts
+                )
+            
+            # Embeddings dos chunks (em lotes para evitar erro de limite)
+            embeddings_chunks = []
+            lote_tamanho = 100
+            for i in range(0, len(chunks), lote_tamanho):
+                lote = chunks[i:i+lote_tamanho]
+                res = await self._executar_com_retry(_embed, lote)
+                for e in res.embeddings:
+                    embeddings_chunks.append(e.values)
+                    
+            # 2. Definição das queries do RAG para as seções necessárias
+            queries = [
+                "início da sessão e recapitulação do que aconteceu antes",
+                "combates épicos, lutas, batalhas, magias lançadas, ataques, dano, mortes, rolagens de dados",
+                "roleplay, conversas marcantes, piadas, interações engraçadas, decisões de história e NPCs",
+                "regras de Dungeons and Dragons 5e, táticas, dicas de sobrevivência, uso de habilidades"
+            ]
+            
+            res_queries = await self._executar_com_retry(_embed, queries)
+            embeddings_queries = [e.values for e in res_queries.embeddings]
+            
+            # 3. Busca dos Top-K chunks por query
+            K = 6 # Total máximo de chunks: 4 queries * 6 = 24 chunks (~36.000 chars)
+            indices_selecionados = set()
+            
+            for q_emb in embeddings_queries:
+                similaridades = []
+                for idx, c_emb in enumerate(embeddings_chunks):
+                    sim = _get_cosine_similarity(q_emb, c_emb)
+                    similaridades.append((idx, sim))
+                similaridades.sort(key=lambda x: x[1], reverse=True)
+                for idx, sim in similaridades[:K]:
+                    indices_selecionados.add(idx)
+                    
+            # 4. Reconstrução do texto ordenado cronologicamente
+            indices_ordenados = sorted(list(indices_selecionados))
+            transcricao_reduzida = "\n\n[...] (trecho pulado pelo RAG) [...]\n\n".join([chunks[i] for i in indices_ordenados])
+            
+            logger.info(f"RAG concluído. Tamanho reduzido de {len(transcricao)} para {len(transcricao_reduzida)} caracteres.")
+            transcricao = transcricao_reduzida
 
         prompt = (
-            "És um Mestre de RPG veterano. Pega no seguinte resumo bruto de uma sessão e "
-            "transforma-o numa crônica épica, formatada em Markdown, focando-te nas ações dos jogadores, "
-            "itens encontrados e ganchos da história. Resumo bruto:\n\n" + transcricao
+            f"""Atue como o 'Narrador de RPG', um mestre experiente na arte de converter diálogos e ações de mesas de D&D 5e em crônicas memoráveis.
+            Objetivos:
+            * Transformar transcrições brutas de sessões em atas organizadas e envolventes.
+            * Equilibrar uma narrativa épica com o humor metajogo típico de grupos de RPG.
+            * Fornecer análises estratégicas úteis para os jogadores baseadas no sistema D&D 5e.
+            Comportamento e Regras:
+            1) Tom e Estilo:
+            - Use um tom 'épico-clerical' (solene e grandioso) misturado com um humor ácido e casual.
+            - Preserve o 'metagame' e as piadas internas dos jogadores, integrando-os à narrativa de forma criativa.
+            - Utilize emotes específicos no início de cada tópico (⚔️, 💰, 👁️, 🚪, 🆙).
+            2) Estrutura Obrigatória:
+            - Título Temático: '📜 Ata de Sessão: [Nome Criativo]'.
+            - Cabeçalho de Dados: Liste Data, Mestre, Jogadores e Localização.
+            - Seção 1 - Recapitulação (Flashback): Resumo de 2-3 frases do fim da sessão anterior.
+            - Seção 2 - O Grande 'Quebra-Pau' (Combate): Descrição cinematográfica com destaques individuais e momentos épicos/críticos.
+            - Seção 3 - Roleplay e Pérolas: Tradução de falas marcantes, piadas e decisões de lore.
+            - Seção 4 - Dicas de Sobrevivência (💡): 3 a 4 dicas técnicas baseadas em regras de D&D 5e e contexto da mesa.
+            - Fechamento: Frase de efeito (Cliffhanger) e status de evolução.
+            3) Terminologia:
+            - Mantenha termos técnicos (Death Ward, Long Rest, Plate Armor) e nomes de magias em destaque (itálico ou negrito).
+            - Use LaTeX apenas para cálculos matemáticos complexos; prefira texto simples para danos diretos.
+
+            --- Início da transcrição ---
+            {transcricao}
+            ---
+            """
         )
 
         def _call_generate():
@@ -152,4 +244,5 @@ class GeminiService:
 
         resposta = await self._executar_com_retry(_call_generate)
         return resposta.text
+
 
