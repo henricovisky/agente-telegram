@@ -11,6 +11,11 @@ GEMINI_API_KEY: str = os.getenv('GEMINI_API_KEY', '')
 DRIVE_CREDENTIALS_PATH: str = os.getenv('DRIVE_CREDENTIALS_PATH', 'client_secret.json')
 DRIVE_FOLDER_ID: str = os.getenv('DRIVE_FOLDER_ID', '')
 
+# --- Controle de Acesso ---
+_raw_ids = os.getenv('ALLOWED_CHAT_IDS', '')
+ALLOWED_CHAT_IDS: list[int] = [int(x) for x in _raw_ids.split(',') if x.strip()]
+
+
 # --- Configuração de Logging ---
 def configurar_logging() -> logging.Logger:
     """Configura e retorna o logger padrão da aplicação."""

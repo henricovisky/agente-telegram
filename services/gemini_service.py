@@ -1,10 +1,11 @@
 import time
 import asyncio
 from google import genai
-from google.genai import types
 from google.genai.errors import APIError
 
 from config import GEMINI_API_KEY, logger
+from agent.prompt_registry import get as get_prompt
+from agent.token_manager import token_manager
 
 
 class GeminiService:
@@ -207,34 +208,8 @@ class GeminiService:
             logger.info(f"RAG concluído. Tamanho reduzido de {len(transcricao)} para {len(transcricao_reduzida)} caracteres.")
             transcricao = transcricao_reduzida
 
-        prompt = (
-            f"""Atue como o 'Narrador de RPG', um mestre experiente na arte de converter diálogos e ações de mesas de D&D 5e em crônicas memoráveis.
-            Objetivos:
-            * Transformar transcrições brutas de sessões em atas organizadas e envolventes.
-            * Equilibrar uma narrativa épica com o humor metajogo típico de grupos de RPG.
-            * Fornecer análises estratégicas úteis para os jogadores baseadas no sistema D&D 5e.
-            Comportamento e Regras:
-            1) Tom e Estilo:
-            - Use um tom 'épico-clerical' (solene e grandioso) misturado com um humor ácido e casual.
-            - Preserve o 'metagame' e as piadas internas dos jogadores, integrando-os à narrativa de forma criativa.
-            - Utilize emotes específicos no início de cada tópico (⚔️, 💰, 👁️, 🚪, 🆙).
-            2) Estrutura Obrigatória:
-            - Título Temático: '📜 Ata de Sessão: [Nome Criativo]'.
-            - Cabeçalho de Dados: Liste Data, Mestre, Jogadores e Localização.
-            - Seção 1 - Recapitulação (Flashback): Resumo de 2-3 frases do fim da sessão anterior.
-            - Seção 2 - O Grande 'Quebra-Pau' (Combate): Descrição cinematográfica com destaques individuais e momentos épicos/críticos.
-            - Seção 3 - Roleplay e Pérolas: Tradução de falas marcantes, piadas e decisões de lore.
-            - Seção 4 - Dicas de Sobrevivência (💡): 3 a 4 dicas técnicas baseadas em regras de D&D 5e e contexto da mesa.
-            - Fechamento: Frase de efeito (Cliffhanger) e status de evolução.
-            3) Terminologia:
-            - Mantenha termos técnicos (Death Ward, Long Rest, Plate Armor) e nomes de magias em destaque (itálico ou negrito).
-            - Use LaTeX apenas para cálculos matemáticos complexos; prefira texto simples para danos diretos.
-
-            --- Início da transcrição ---
-            {transcricao}
-            ---
-            """
-        )
+        prompt_cfg = get_prompt("rpg.cronica")
+        prompt = prompt_cfg["template"].format(transcricao=transcricao)
 
         def _call_generate():
             return self.client.models.generate_content(
@@ -243,6 +218,11 @@ class GeminiService:
             )
 
         resposta = await self._executar_com_retry(_call_generate)
-        return resposta.text
+        cronica = resposta.text
+
+        # Registra uso estimado de tokens
+        token_manager.registrar_uso(self.MODELO_CRONICA, len(prompt), len(cronica))
+
+        return cronica
 
 
