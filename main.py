@@ -29,10 +29,12 @@ def main() -> None:
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
     # Regista os comandos disponíveis
+    app.add_handler(CommandHandler("rpg_transcrever", handlers.rpg_transcrever))
     app.add_handler(CommandHandler("rpg_resumo", handlers.rpg_resumo))
 
     logger.info("Oráculo de Mesa a iniciar... Aguardando comandos.")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
+
 
 
 if __name__ == '__main__':

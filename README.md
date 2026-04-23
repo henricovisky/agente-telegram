@@ -54,5 +54,19 @@ python main.py
 10. Na primeira execução, o bot abrirá uma janela no seu navegador para autorizar o acesso ao Drive. O token será guardado em `token.json` para uso futuro.
 
 ## Como usar
-Após iniciar o bot, vá ao seu Telegram e envie a mensagem `/rpg_resumo` para que ele procure o áudio mais recente no Drive, processe as informações e lhe devolva o PDF final com a crónica da sessão!
+O processo foi dividido em duas etapas para maior flexibilidade e economia de recursos:
+
+1. **Transcrição (`/rpg_transcrever`):** 
+   - O bot procura o áudio mais recente no Drive.
+   - Realiza a transcrição via Gemini File API.
+   - Faz o upload do arquivo `.txt` de volta para o Drive.
+   - *Use este comando apenas uma vez por sessão.*
+
+2. **Geração de Crônica (`/rpg_resumo`):**
+   - O bot procura a transcrição (`.txt`) mais recente no Drive.
+   - Utiliza a técnica de **RAG** para reduzir o texto se ele for muito longo.
+   - Gera a Crônica Épica e o PDF formatado.
+   - Faz o upload do PDF e o envia diretamente para você no Telegram.
+   - *Você pode repetir este comando se quiser regerar a crônica com um estilo diferente ou se houver falhas na geração sem precisar transcrever o áudio novamente.*
+
 

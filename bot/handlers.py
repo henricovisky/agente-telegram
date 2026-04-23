@@ -25,95 +25,91 @@ class BotHandlers:
         self._gemini = GeminiService()
         self._pdf = PdfService()
 
-    async def rpg_resumo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def rpg_transcrever(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
-        Handler para o comando /rpg_resumo.
-
-        Fluxo completo:
-          1. Encontra o áudio mais recente no Google Drive
-          2. Faz o download em blocos (sem sobrecarregar a RAM)
-          3. Transcreve com Gemini Flash via File API
-          4. Guarda e envia a transcrição bruta para o Drive
-          5. Gera a Crónica Épica com Gemini Pro
-          6. Cria o PDF localmente com fpdf2
-          7. Envia o PDF ao utilizador e faz upload para o Drive
-          8. Remove todos os ficheiros temporários do disco local
+        Handler para o comando /rpg_transcrever.
+        Localiza o áudio, transcreve e guarda o TXT no Drive.
         """
         chat_id = update.effective_chat.id
-
-        # Variáveis dos ficheiros temporários; inicializadas a None
-        # para que o bloco `finally` possa apagar apenas os que foram criados
         caminho_audio = None
         caminho_txt = None
-        caminho_pdf = None
 
         try:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="🕵️‍♀️ A iniciar a procura do áudio mais recente no Drive..."
-            )
+            await context.bot.send_message(chat_id=chat_id, text="🎙️ A iniciar a transcrição... Procura do áudio no Drive...")
 
-            # --- Etapa 1: Localizar o áudio no Drive ---
             audio_info = await self._drive.encontrar_audio_mais_recente()
             if not audio_info:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="❌ Não encontrei nenhum ficheiro de áudio recente no Drive."
-                )
+                await context.bot.send_message(chat_id=chat_id, text="❌ Nenhum áudio encontrado.")
                 return
 
             file_id = audio_info['id']
             file_name = audio_info['name']
             caminho_audio = f"temp_{file_id}.mp3"
 
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"📥 Encontrado: '{file_name}'. A descarregar em blocos..."
-            )
-
-            # --- Etapa 2: Download do ficheiro em chunks ---
+            await context.bot.send_message(chat_id=chat_id, text=f"📥 Baixando '{file_name}'...")
             await self._drive.fazer_download(file_id, caminho_audio)
 
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="⚙️ Áudio descarregado. A enviar para o Gemini e aguardar transcrição..."
-            )
-
-            # --- Etapa 3: Transcrição via Gemini Flash + File API ---
+            await context.bot.send_message(chat_id=chat_id, text="⚙️ Transcrevendo com Gemini (File API)...")
             transcricao = await self._gemini.transcrever_audio(caminho_audio)
 
-            # --- Etapa 4: Guardar transcrição bruta em TXT e fazer upload para o Drive ---
             caminho_txt = f"transcricao_{file_id}.txt"
             with open(caminho_txt, "w", encoding="utf-8") as f:
                 f.write(transcricao)
 
             await self._drive.fazer_upload(
                 caminho_txt,
-                nome=f"Transcricao_Bruta_{file_name}.txt",
+                nome=f"Transcricao_{file_name}.txt",
                 mime_type="text/plain"
             )
 
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="📜 Transcrição bruta concluída e guardada no Drive. A gerar a Crónica Épica..."
-            )
+            await context.bot.send_message(chat_id=chat_id, text="✅ Transcrição concluída e enviada ao Drive!")
 
-            # --- Etapa 5: Geração da Crónica Épica com Gemini Pro ---
+        except Exception as e:
+            logger.error(f"Erro em /rpg_transcrever: {e}", exc_info=True)
+            await context.bot.send_message(chat_id=chat_id, text=f"❌ Erro: {str(e)}")
+        finally:
+            for c in [caminho_audio, caminho_txt]:
+                if c and os.path.exists(c): os.remove(c)
+
+    async def rpg_resumo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Handler para o comando /rpg_resumo.
+        Localiza a transcrição (.txt), gera a crônica e o PDF.
+        """
+        chat_id = update.effective_chat.id
+        caminho_txt = None
+        caminho_pdf = None
+
+        try:
+            await context.bot.send_message(chat_id=chat_id, text="📜 Procura da transcrição mais recente no Drive...")
+
+            txt_info = await self._drive.encontrar_transcricao_mais_recente()
+            if not txt_info:
+                await context.bot.send_message(
+                    chat_id=chat_id, 
+                    text="❌ Nenhuma transcrição (.txt) encontrada. Use /rpg_transcrever primeiro."
+                )
+                return
+
+            file_id = txt_info['id']
+            file_name = txt_info['name']
+            caminho_txt = f"temp_txt_{file_id}.txt"
+
+            await context.bot.send_message(chat_id=chat_id, text=f"📥 Baixando transcrição '{file_name}'...")
+            await self._drive.fazer_download(file_id, caminho_txt)
+
+            with open(caminho_txt, "r", encoding="utf-8") as f:
+                transcricao = f.read()
+
+            await context.bot.send_message(chat_id=chat_id, text="✨ Gerando Crônica Épica (RAG + Gemini)...")
             cronica_md = await self._gemini.gerar_cronica_epica(transcricao)
 
-            # --- Etapa 6: Geração local do PDF ---
-            caminho_pdf = f"Cronica_Epica_{file_id}.pdf"
+            caminho_pdf = f"Cronica_{file_id}.pdf"
             await self._pdf.criar_pdf(cronica_md, caminho_pdf)
 
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="📚 PDF gerado com sucesso! A fazer upload para o Drive e a enviar para si..."
-            )
-
-            # --- Etapa 7: Upload do PDF para o Drive e envio ao utilizador ---
             await self._drive.fazer_upload(
                 caminho_pdf,
-                nome=f"Cronica_{file_name}.pdf",
+                nome=f"Cronica_{file_name.replace('.txt', '')}.pdf",
                 mime_type="application/pdf"
             )
 
@@ -121,28 +117,15 @@ class BotHandlers:
                 await context.bot.send_document(
                     chat_id=chat_id,
                     document=pdf_file,
-                    filename=f"Cronica_{file_name}.pdf"
+                    filename=f"Cronica_{file_name.replace('.txt', '')}.pdf"
                 )
 
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="✨ Missão cumprida! A Crónica Épica foi entregue."
-            )
+            await context.bot.send_message(chat_id=chat_id, text="⚔️ Crônica entregue com sucesso!")
 
         except Exception as e:
-            logger.error(f"Erro ao processar o comando /rpg_resumo: {e}", exc_info=True)
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"❌ Ocorreu um erro inesperado: {str(e)}"
-            )
-
+            logger.error(f"Erro em /rpg_resumo: {e}", exc_info=True)
+            await context.bot.send_message(chat_id=chat_id, text=f"❌ Erro: {str(e)}")
         finally:
-            # --- Etapa 8: Limpeza dos ficheiros temporários do disco ---
-            logger.info("A apagar ficheiros temporários do disco...")
-            for caminho in [caminho_audio, caminho_txt, caminho_pdf]:
-                if caminho and os.path.exists(caminho):
-                    try:
-                        os.remove(caminho)
-                        logger.info(f"Ficheiro temporário apagado: {caminho}")
-                    except OSError as e:
-                        logger.warning(f"Não foi possível apagar '{caminho}': {e}")
+            for c in [caminho_txt, caminho_pdf]:
+                if c and os.path.exists(c): os.remove(c)
+

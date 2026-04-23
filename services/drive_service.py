@@ -69,6 +69,22 @@ class DriveService:
         else:
             query = "mimeType contains 'audio/' and trashed = false"
 
+        return await self._pesquisar_arquivo(query)
+
+    async def encontrar_transcricao_mais_recente(self) -> dict | None:
+        """
+        Pesquisa na pasta do Drive o ficheiro de texto (.txt) mais recente.
+        Retorna um dicionário com os metadados do ficheiro ou None se não existir.
+        """
+        if self._folder_id:
+            query = f"'{self._folder_id}' in parents and mimeType = 'text/plain' and trashed = false"
+        else:
+            query = "mimeType = 'text/plain' and trashed = false"
+
+        return await self._pesquisar_arquivo(query)
+
+    async def _pesquisar_arquivo(self, query: str) -> dict | None:
+        """Helper para pesquisar arquivos no Drive com uma query específica."""
         loop = asyncio.get_running_loop()
 
         def _pesquisar():
@@ -85,13 +101,13 @@ class DriveService:
                 if error.resp.status == 404:
                     raise ValueError(
                         f"A pasta com ID '{self._folder_id}' não foi encontrada. "
-                        "Verifique se o DRIVE_FOLDER_ID está correto no ficheiro .env "
-                        "e se partilhou a pasta com o email da Service Account."
+                        "Verifique se o DRIVE_FOLDER_ID está correto no ficheiro .env."
                     )
                 raise error
 
         itens = await loop.run_in_executor(None, _pesquisar)
         return itens[0] if itens else None
+
 
     async def fazer_download(self, file_id: str, caminho_local: str) -> str:
         """
