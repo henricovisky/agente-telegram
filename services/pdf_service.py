@@ -1,13 +1,9 @@
 import re
 import asyncio
+import os
 from fpdf import FPDF
 
 from config import logger
-
-
-def _sanitizar(texto: str) -> str:
-    """Converte texto para latin-1, substituindo caracteres não suportados."""
-    return texto.encode('latin-1', 'replace').decode('latin-1')
 
 
 class CronicaPDF(FPDF):
@@ -24,9 +20,9 @@ class CronicaPDF(FPDF):
 
     def footer(self):
         self.set_y(-13)
-        self.set_font('Helvetica', 'I', 8)
+        self.set_font('Arial', 'I', 8)
         self.set_text_color(150, 120, 80)
-        self.cell(0, 10, _sanitizar(f'Crônica Épica  ·  Página {self.page_no()}'), align='C')
+        self.cell(0, 10, f'Crônica Épica  ·  Página {self.page_no()}', align='C')
         # Linha decorativa no rodapé
         self.set_draw_color(139, 90, 43)
         self.set_line_width(0.5)
@@ -38,6 +34,7 @@ class PdfService:
     Encapsula a geração local de ficheiros PDF a partir de texto Markdown.
     Parseia Markdown (cabeçalhos, negrito, itálico, listas, réguas)
     e gera um documento visualmente agradável usando fpdf2.
+    Suporta Emojis e fontes Unicode via fallback fonts do Windows.
     """
 
     # Margens (mm)
@@ -47,6 +44,26 @@ class PdfService:
         """Inicializa o serviço de PDF."""
         pass
 
+    def _setup_fonts(self, pdf: FPDF):
+        """Configura as fontes Unicode e fallbacks (Emojis)."""
+        # Adiciona família Arial (suporte a acentos utf-8 nativo)
+        windows_font_dir = "c:/Windows/Fonts"
+        
+        try:
+            pdf.add_font("Arial", "", os.path.join(windows_font_dir, "arial.ttf"))
+            pdf.add_font("Arial", "B", os.path.join(windows_font_dir, "arialbd.ttf"))
+            pdf.add_font("Arial", "I", os.path.join(windows_font_dir, "ariali.ttf"))
+            pdf.add_font("Arial", "BI", os.path.join(windows_font_dir, "arialbi.ttf"))
+        except Exception:
+            # Fallback caso não encontre arial
+            pass
+
+        # Adiciona Segoe UI Emoji como fallback para Emojis
+        emoji_path = os.path.join(windows_font_dir, "seguiemj.ttf")
+        if os.path.exists(emoji_path):
+            pdf.add_font("SegoeUIEmoji", fname=emoji_path)
+            pdf.set_fallback_fonts(["SegoeUIEmoji"])
+
     # ------------------------------------------------------------------
     # Renderizadores por tipo de linha Markdown
     # ------------------------------------------------------------------
@@ -54,10 +71,10 @@ class PdfService:
     def _render_h1(self, pdf: CronicaPDF, texto: str, largura: float):
         """Título principal: fonte grande, negrito, cor dourada, centrado."""
         pdf.ln(6)
-        pdf.set_font('Helvetica', 'B', 22)
+        pdf.set_font('Arial', 'B', 22)
         pdf.set_text_color(120, 80, 20)
         pdf.set_x(self.MARGEM)
-        pdf.multi_cell(largura, 12, txt=_sanitizar(texto), align='C')
+        pdf.multi_cell(largura, 12, txt=texto, align='C')
         # Sublinhado decorativo
         y = pdf.get_y()
         pdf.set_draw_color(139, 90, 43)
@@ -68,10 +85,10 @@ class PdfService:
     def _render_h2(self, pdf: CronicaPDF, texto: str, largura: float):
         """Subtítulo: fonte média, negrito, cor castanha."""
         pdf.ln(5)
-        pdf.set_font('Helvetica', 'B', 15)
+        pdf.set_font('Arial', 'B', 15)
         pdf.set_text_color(100, 60, 20)
         pdf.set_x(self.MARGEM)
-        pdf.multi_cell(largura, 9, txt=_sanitizar(texto))
+        pdf.multi_cell(largura, 9, txt=texto)
         # Linha fina abaixo
         y = pdf.get_y()
         pdf.set_draw_color(180, 140, 80)
@@ -82,10 +99,10 @@ class PdfService:
     def _render_h3(self, pdf: CronicaPDF, texto: str, largura: float):
         """Sub-subtítulo: negrito, cor mais suave."""
         pdf.ln(3)
-        pdf.set_font('Helvetica', 'B', 12)
+        pdf.set_font('Arial', 'B', 12)
         pdf.set_text_color(80, 55, 25)
         pdf.set_x(self.MARGEM)
-        pdf.multi_cell(largura, 8, txt=_sanitizar(texto))
+        pdf.multi_cell(largura, 8, txt=texto)
         pdf.ln(2)
 
     def _render_hr(self, pdf: CronicaPDF):
@@ -99,17 +116,17 @@ class PdfService:
 
     def _render_bullet(self, pdf: CronicaPDF, texto: str, largura: float):
         """Item de lista com marcador personalizado."""
-        pdf.set_font('Helvetica', '', 11)
+        pdf.set_font('Arial', '', 11)
         pdf.set_text_color(40, 30, 20)
         # Recuo para o marcador
         recuo = 6
         pdf.set_x(self.MARGEM + recuo)
         # Marcador decorativo
-        pdf.set_font('Helvetica', 'B', 11)
-        pdf.cell(5, 7, _sanitizar('\x95'), ln=False)   # bullet char
-        pdf.set_font('Helvetica', '', 11)
+        pdf.set_font('Arial', 'B', 11)
+        pdf.cell(5, 7, '•', new_x="RIGHT", new_y="TOP")   # bullet char
+        pdf.set_font('Arial', '', 11)
         pdf.set_x(self.MARGEM + recuo + 5)
-        pdf.multi_cell(largura - recuo - 5, 7, txt=_sanitizar(texto))
+        pdf.multi_cell(largura - recuo - 5, 7, txt=texto)
 
     def _render_paragrafo(self, pdf: CronicaPDF, texto: str, largura: float):
         """
@@ -125,14 +142,14 @@ class PdfService:
         # Usamos write() para manter o fluxo inline
         for parte in partes:
             if parte.startswith('**') and parte.endswith('**'):
-                pdf.set_font('Helvetica', 'B', 11)
-                pdf.write(altura, _sanitizar(parte[2:-2]))
+                pdf.set_font('Arial', 'B', 11)
+                pdf.write(altura, parte[2:-2])
             elif parte.startswith('*') and parte.endswith('*'):
-                pdf.set_font('Helvetica', 'I', 11)
-                pdf.write(altura, _sanitizar(parte[1:-1]))
+                pdf.set_font('Arial', 'I', 11)
+                pdf.write(altura, parte[1:-1])
             else:
-                pdf.set_font('Helvetica', '', 11)
-                pdf.write(altura, _sanitizar(parte))
+                pdf.set_font('Arial', '', 11)
+                pdf.write(altura, parte)
         pdf.ln(altura + 1)
 
     # ------------------------------------------------------------------
@@ -150,6 +167,7 @@ class PdfService:
 
         def _criar():
             pdf = CronicaPDF()
+            self._setup_fonts(pdf)
             pdf.set_auto_page_break(auto=True, margin=20)
             pdf.set_margins(self.MARGEM, self.MARGEM, self.MARGEM)
             pdf.add_page()
