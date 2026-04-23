@@ -14,11 +14,11 @@ class GeminiService:
     transcrição de áudio e geração da crônica épica de RPG.
     """
     # Modelos atualizados para a nova SDK
-    MODELO_TRANSCRICAO = 'gemini-2.5-flash-lite'
-    MODELO_CRONICA = 'gemini-2.5-flash'
+    MODELO_TRANSCRICAO = 'gemini-2.0-flash'
+    MODELO_CRONICA = 'gemini-2.0-flash'
 
     # Intervalo de espera base (em segundos)
-    INTERVALO_ESPERA_SEGUNDOS = 20
+    INTERVALO_ESPERA_SEGUNDOS = 30
     MAX_RETRIES = 5
 
     def __init__(self, api_key: str = GEMINI_API_KEY):
@@ -31,9 +31,9 @@ class GeminiService:
 
     async def _executar_com_retry(self, func, *args, **kwargs):
         """
-        Executa uma função síncrona com retry em caso de Rate Limit (429).
-        Se a API informar o tempo de espera ('retry in Xs'), usa esse tempo + margem.
-        Caso contrário, o backoff é exponencial.
+        Executa uma função síncrona com retry em caso de Rate Limit (429) ou 503.
+        Distingue entre rate limit por minuto (recuperável via retry) e
+        quota diária esgotada (falha imediata, retry não adianta).
         """
         import re
         loop = asyncio.get_running_loop()
@@ -45,6 +45,18 @@ class GeminiService:
             except Exception as e:
                 msg = str(e)
                 if any(err in msg for err in ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE"]):
+                    
+                    # --- Detecção de quota diária esgotada (NÃO recuperável com retry) ---
+                    # Quando "limit: 0" aparece, a cota do dia ou do projeto acabou.
+                    # Tentar de novo nunca vai funcionar — falha imediata.
+                    if "limit: 0" in msg or "PerDay" in msg:
+                        logger.error("Cota diária do Gemini esgotada. Não é possível recuperar via retry.")
+                        raise RuntimeError(
+                            "⚠️ A cota diária da API do Gemini foi esgotada. "
+                            "Aguarde a renovação (geralmente meia-noite, horário do Pacífico) "
+                            "ou ative o faturamento no Google AI Studio."
+                        )
+
                     tentativa += 1
                     
                     # Backoff exponencial base
