@@ -1,72 +1,184 @@
-# Agente Reunião (Oráculo de Mesa)
+# Henricovisky — Agente IA Pessoal no Telegram
 
-Este é um bot de Telegram assíncrono projetado para funcionar em servidores com baixa memória RAM (< 1GB). Ele faz download de ficheiros de áudio pesados do Google Drive usando streams/chunks, utiliza a File API do Gemini (Google) para processamento em nuvem, transcreve a sessão e gera uma "Crónica Épica" de RPG em formato PDF de forma nativa e gratuita.
+Bot de IA pessoal que roda no seu próprio servidor 24/7. Funciona como um assistente inteligente via Telegram: você envia um comando, ele pensa com o **Gemini** e executa automações reais — transcrição de áudios, geração de PDFs, acesso ao Google Drive — sem custos de assinatura e sem limites de plataforma.
 
-O sistema inclui uma camada de **RAG (Retrieval-Augmented Generation)** para processar transcrições de longa duração (mais de 1 hora), selecionando semanticamente os trechos mais relevantes para garantir que o limite de tokens não seja excedido e que a qualidade da crônica seja mantida.
+> Arquitetura modular: cada novo comando é um arquivo novo em `bot/modules/`. Nenhum código central precisa ser alterado.
+
+---
+
+## Módulos disponíveis
+
+| Comando | Descrição |
+|---|---|
+| `/start` | Boas-vindas e lista de módulos |
+| `/ajuda` | Todos os comandos disponíveis |
+| `/status` | Tokens Gemini usados hoje |
+| `/status_server` | CPU, RAM, Disco e uptime do servidor |
+| `/update` | Atualiza o bot via GitHub + reinicia |
+| `/memoria` | Histórico de conversa do chat |
+| `/memoria_limpar` | Apaga o histórico |
+| `/rpg_transcrever` | Transcreve o áudio de RPG mais recente do Drive |
+| `/rpg_resumo` | Gera a Crônica Épica em PDF a partir da transcrição |
+
+---
 
 ## Pré-requisitos
+
+- VPS Linux (Ubuntu 22.04+) com mínimo 1 GB RAM
 - Python 3.10+
-- Conta no Google Cloud com a API do Google Drive ativada
-- API Key do Gemini (Google AI Studio)
-- Bot criado no BotFather (Telegram) com o respetivo Token
+- Conta Google Cloud com **Drive API** ativada
+- **API Key do Gemini** (Google AI Studio — gratuito)
+- **Token do Bot Telegram** (criado no BotFather)
 
-## Instalação e Execução
+---
 
-1. **Configurar o ambiente virtual (venv):**
-```bash
-python -m venv venv
-```
+## Deploy no Servidor
 
-2. **Ativar o ambiente virtual:**
-No Windows:
-```bash
-.\venv\Scripts\activate
-```
-No Linux/Mac:
-```bash
-source venv/bin/activate
-```
+### 1. Gerar o token OAuth2 do Drive (na sua máquina local)
 
-3. **Instalar as dependências:**
+Antes de ir ao servidor, autorize o acesso ao Google Drive uma única vez na sua máquina:
+
 ```bash
+git clone https://github.com/henricovisky/agente-telegram.git
+cd agente-telegram
+python -m venv venv && venv\Scripts\activate   # Windows
 pip install -r requirements.txt
+python main.py   # um navegador vai abrir → autorize → token.json é gerado
+# Ctrl+C para parar após o token ser gerado
 ```
 
-4. **Configurar o ficheiro `.env`:**
-Copie o ficheiro `.env.example` para `.env` e preencha as suas chaves.
+### 2. Transferir arquivos para o servidor
 
-5. **Correr o bot:**
 ```bash
-python main.py
+scp setup_server.sh    usuario@servidor:/tmp/
+scp client_secret.json usuario@servidor:/tmp/
+scp token.json         usuario@servidor:/tmp/
 ```
 
-## Como configurar as Credenciais do Google Drive (OAuth2)
+### 3. Rodar o script de instalação no servidor
 
-1. Vá à [Google Cloud Console](https://console.cloud.google.com/).
-2. Crie um novo projeto ou selecione um existente.
-3. No menu de navegação, vá a **APIs & Services** > **Library**.
-4. Procure por **Google Drive API** e clique em **Enable** (Ativar).
-5. Vá a **APIs & Services** > **OAuth consent screen** e configure como "External" (ou Internal se tiver Workspace). Adicione o seu email como "Test User".
-6. Vá a **APIs & Services** > **Credentials**.
-7. Clique em **Create Credentials** > **OAuth client ID**.
-8. Escolha **Desktop App**, dê um nome e clique em **Create**.
-9. Descarregue o ficheiro JSON, renomeie-o para `client_secret.json` (ou o nome configurado no `.env`) e coloque-o na raiz do projeto.
-10. Na primeira execução, o bot abrirá uma janela no seu navegador para autorizar o acesso ao Drive. O token será guardado em `token.json` para uso futuro.
+```bash
+ssh usuario@servidor
+bash /tmp/setup_server.sh
+```
 
-## Como usar
-O processo foi dividido em duas etapas para maior flexibilidade e economia de recursos:
+O script faz automaticamente:
+- Instala Python 3, Git e dependências do sistema
+- Clona o repositório em `/opt/henricovisky`
+- Cria o ambiente virtual e instala os pacotes
+- Cria o arquivo `.env` a partir do exemplo
+- Registra o serviço `systemd` com reinício automático
 
-1. **Transcrição (`/rpg_transcrever`):** 
-   - O bot procura o áudio mais recente no Drive.
-   - Realiza a transcrição via Gemini File API.
-   - Faz o upload do arquivo `.txt` de volta para o Drive.
-   - *Use este comando apenas uma vez por sessão.*
+### 4. Configurar as credenciais
 
-2. **Geração de Crônica (`/rpg_resumo`):**
-   - O bot procura a transcrição (`.txt`) mais recente no Drive.
-   - Utiliza a técnica de **RAG** para reduzir o texto se ele for muito longo.
-   - Gera a Crônica Épica e o PDF formatado.
-   - Faz o upload do PDF e o envia diretamente para você no Telegram.
-   - *Você pode repetir este comando se quiser regerar a crônica com um estilo diferente ou se houver falhas na geração sem precisar transcrever o áudio novamente.*
+```bash
+nano /opt/henricovisky/.env
+```
 
+Preencha:
+```dotenv
+TELEGRAM_TOKEN=seu_token_do_botfather
+GEMINI_API_KEY=sua_chave_do_google_ai_studio
+DRIVE_FOLDER_ID=id_da_pasta_no_drive
+ALLOWED_CHAT_IDS=seu_chat_id_do_telegram
+```
 
+> Seu chat ID pode ser obtido falando com `@userinfobot` no Telegram.
+
+### 5. Mover as credenciais OAuth2
+
+```bash
+mv /tmp/client_secret.json /opt/henricovisky/
+mv /tmp/token.json         /opt/henricovisky/
+```
+
+### 6. Iniciar o bot
+
+```bash
+sudo systemctl start henricovisky
+sudo journalctl -u henricovisky -f   # ver logs ao vivo
+```
+
+O bot sobe automaticamente com o servidor e se reinicia em caso de falha.
+
+---
+
+## Uso do `start.sh` (script inteligente)
+
+O `start.sh` verifica o ambiente antes de iniciar. Pode ser usado tanto no servidor quanto localmente:
+
+```bash
+bash start.sh
+```
+
+O que ele verifica:
+- ✔ Python 3 instalado
+- ✔ `venv/` existe (cria se não existir)
+- ✔ Dependências do `requirements.txt` instaladas (instala se não estiver)
+- ✔ `.env` preenchido (não apenas o exemplo)
+- ⚠ `token.json` e `client_secret.json` presentes
+- ✔ Pasta `data/` criada
+
+Se tudo estiver OK, inicia o bot diretamente.
+
+---
+
+## Atualizar o bot
+
+Via Telegram, basta enviar:
+```
+/update
+```
+
+O bot faz `git pull`, `pip install -r requirements.txt` e reinicia o processo automaticamente.
+
+---
+
+## Adicionar um novo comando
+
+1. Criar `bot/modules/meu_modulo.py` com a função handler
+2. Registrar em `bot/registry.py`:
+   ```python
+   from bot.modules import meu_modulo
+   app.add_handler(CommandHandler("meu_comando", autorizados_apenas(meu_modulo.handler)))
+   ```
+3. Enviar `/update` no Telegram
+
+---
+
+## Estrutura do Projeto
+
+```
+agente-telegram/
+├── main.py                    # Ponto de entrada
+├── config.py                  # Variáveis de ambiente
+├── start.sh                   # Script inteligente de inicialização
+├── setup_server.sh            # Instalação completa no servidor
+│
+├── agent/                     # Núcleo do agente
+│   ├── context.py             # Memória de conversa por chat
+│   ├── token_manager.py       # Orçamento e rastreamento de tokens
+│   └── prompt_registry.py     # Repositório central de prompts
+│
+├── bot/
+│   ├── registry.py            # Registro central de comandos
+│   ├── middleware.py          # Autenticação e controle de acesso
+│   └── modules/
+│       ├── core.py            # Comandos base (/start, /status, /update...)
+│       ├── rpg.py             # Módulo RPG
+│       └── admin.py           # /update
+│
+└── services/
+    ├── gemini_service.py      # Gemini: transcrição, geração, RAG
+    ├── drive_service.py       # Google Drive: upload, download, busca
+    ├── pdf_service.py         # Markdown → PDF (fpdf2)
+    └── memory_service.py      # SQLite: rastreamento de tokens
+```
+
+---
+
+## Segurança
+
+- Credenciais nunca versionadas (`.gitignore` cobre `.env`, `token.json`, `client_secret.json`)
+- Acesso restrito por `ALLOWED_CHAT_IDS` — só você (e quem você listar) pode usar o bot
+- Servidor com `Restart=always` no systemd — resiliente a crashes

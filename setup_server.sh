@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # =============================================================================
-# setup_server.sh — Instala e configura o Oráculo de Mesa no servidor Linux
+# setup_server.sh — Instala e configura o Henricovisky Bot no servidor Linux
 # Testado em: Ubuntu 22.04 LTS
 # Uso: bash setup_server.sh
 # =============================================================================
-set -e  # Aborta se qualquer comando falhar
+set -e
 
 # --------------------------------------------------------------------------- #
-# CONFIGURAÇÕES — edite antes de rodar
+# CONFIGURAÇÕES
 # --------------------------------------------------------------------------- #
-REPO_URL="https://github.com/henricovisky/agente-reuni-o.git"  # URL do seu repo
-APP_DIR="/opt/oraculo-de-mesa"                                  # Pasta de instalação
-SERVICE_NAME="oraculo-de-mesa"
-SERVICE_USER="$(whoami)"                                        # Usuário que vai rodar o bot
+REPO_URL="https://github.com/henricovisky/agente-telegram.git"
+APP_DIR="/opt/henricovisky"
+SERVICE_NAME="henricovisky"
+SERVICE_USER="$(whoami)"
 # --------------------------------------------------------------------------- #
 
 GREEN='\033[0;32m'
@@ -20,7 +20,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 step() { echo -e "\n${GREEN}▶ $1${NC}"; }
-warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
+warn() { echo -e "${YELLOW}⚠  $1${NC}"; }
 
 # --------------------------------------------------------------------------- #
 # 1. Dependências do sistema
@@ -63,7 +63,7 @@ pip install -r "$APP_DIR/requirements.txt" -q
 if [ ! -f "$APP_DIR/.env" ]; then
     step "Criando arquivo .env..."
     cp "$APP_DIR/.env.example" "$APP_DIR/.env"
-    warn "ATENÇÃO: Edite o arquivo $APP_DIR/.env com suas credenciais antes de iniciar o bot!"
+    warn "ATENÇÃO: Edite $APP_DIR/.env com suas credenciais antes de iniciar!"
     warn "  nano $APP_DIR/.env"
 else
     step ".env já existe — pulando criação."
@@ -80,10 +80,11 @@ mkdir -p "$APP_DIR/data"
 step "Criando serviço systemd: $SERVICE_NAME..."
 
 PYTHON_BIN="$APP_DIR/venv/bin/python"
+START_SCRIPT="$APP_DIR/start.sh"
 
 sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null <<EOF
 [Unit]
-Description=Oráculo de Mesa — Agente IA Pessoal (Telegram Bot)
+Description=Henricovisky — Agente IA Pessoal (Telegram Bot)
 After=network-online.target
 Wants=network-online.target
 
@@ -91,7 +92,7 @@ Wants=network-online.target
 Type=simple
 User=${SERVICE_USER}
 WorkingDirectory=${APP_DIR}
-ExecStart=${PYTHON_BIN} main.py
+ExecStart=/bin/bash ${START_SCRIPT}
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -102,10 +103,6 @@ Environment=PYTHONUNBUFFERED=1
 WantedBy=multi-user.target
 EOF
 
-# --------------------------------------------------------------------------- #
-# 8. Ativar o serviço (mas NÃO iniciar ainda — falta o .env e o token.json)
-# --------------------------------------------------------------------------- #
-step "Registrando o serviço no systemd..."
 sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
 
@@ -122,20 +119,17 @@ echo ""
 echo "  1. Preencha as credenciais:"
 echo "     nano $APP_DIR/.env"
 echo ""
-echo "  2. Transfira o token OAuth2 do Google Drive"
-echo "     (gere localmente na sua máquina e copie com scp):"
+echo "  2. Transfira o token OAuth2 do Google Drive (gerado localmente):"
 echo "     scp client_secret.json usuario@servidor:$APP_DIR/"
 echo "     scp token.json         usuario@servidor:$APP_DIR/"
 echo ""
 echo "  3. Inicie o bot:"
 echo "     sudo systemctl start $SERVICE_NAME"
+echo "     # OU direto:"
+echo "     bash $APP_DIR/start.sh"
 echo ""
 echo "  4. Verifique os logs:"
 echo "     sudo journalctl -u $SERVICE_NAME -f"
 echo ""
-echo "  Após configurado, o bot sobe automaticamente com o servidor"
-echo "  e se reinicia em caso de falha (Restart=always)."
-echo ""
-echo "  Para atualizar o bot no futuro, use o próprio Telegram:"
-echo "     /update"
+echo "  Para atualizar via Telegram: /update"
 echo "============================================================"
