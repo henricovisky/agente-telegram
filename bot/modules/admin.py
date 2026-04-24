@@ -42,15 +42,19 @@ async def update(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🔄 Iniciando atualização...")
 
-    # --- 1. git pull ---
-    code, out, err = await _subprocess(["git", "pull"], timeout=60)
+    # --- 1. git sync ---
+    # Busca todas as atualizações e força o estado local a bater com a origin/master
+    # Isso resolve erros de merge em arquivos não rastreados (como o erro no start.sh)
+    await _subprocess(["git", "fetch", "--all"], timeout=30)
+    code, out, err = await _subprocess(["git", "reset", "--hard", "origin/master"], timeout=60)
+    
     if code != 0:
         await update.message.reply_text(
-            f"❌ `git pull` falhou:\n```\n{(err or out)[:500]}\n```",
+            f"❌ Falha ao sincronizar com git:\n```\n{(err or out)[:500]}\n```",
             parse_mode="Markdown",
-        )
+            )
         return
-    git_msg = out if out else "Já na versão mais recente."
+    git_msg = "Sincronizado com origin/master (reset --hard)."
 
     # --- 2. pip install ---
     pip_cmd = [sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "-q"]
