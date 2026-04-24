@@ -2,7 +2,7 @@
 
 Bot de IA pessoal que roda no seu próprio servidor 24/7. Funciona como um assistente inteligente via Telegram: você envia um comando, ele pensa com o **Gemini** e executa automações reais — transcrição de áudios, geração de PDFs, acesso ao Google Drive — sem custos de assinatura e sem limites de plataforma.
 
-> Arquitetura modular: cada novo comando é um arquivo novo em `bot/modules/`. Nenhum código central precisa ser alterado.
+> Arquitetura modular: cada novo comando é um arquivo novo em `bot/modules/`. O agente possui **Poderes de Terminal**, permitindo executar comandos bash para gerenciar o servidor e arquivos via chat.
 
 ---
 
@@ -13,12 +13,13 @@ Bot de IA pessoal que roda no seu próprio servidor 24/7. Funciona como um assis
 | `/start` | Boas-vindas e lista de módulos |
 | `/ajuda` | Todos os comandos disponíveis |
 | `/status` | Tokens Gemini usados hoje |
-| `/status_server` | CPU, RAM, Disco e uptime do servidor |
+| `/status_server` | Métricas detalhadas: CPU, RAM, Disco, Rede e Sistema |
 | `/update` | Atualiza o bot via GitHub + reinicia |
 | `/memoria` | Histórico de conversa do chat |
 | `/memoria_limpar` | Apaga o histórico |
 | `/rpg_transcrever` | Transcreve o áudio de RPG mais recente do Drive |
 | `/rpg_resumo` | Gera a Crônica Épica em PDF a partir da transcrição |
+| `Texto Livre` | Conversa com o agente (com **Poderes de Terminal** e acesso a ferramentas) |
 
 ---
 
@@ -169,7 +170,8 @@ agente-telegram/
 │       └── admin.py           # /update
 │
 └── services/
-    ├── gemini_service.py      # Gemini: transcrição, geração, RAG
+    ├── gemini_service.py      # Gemini: transcrição, geração, RAG, **Function Calling**
+    ├── terminal_service.py    # Execução de comandos bash segura
     ├── drive_service.py       # Google Drive: upload, download, busca
     ├── pdf_service.py         # Markdown → PDF (fpdf2)
     └── memory_service.py      # SQLite: rastreamento de tokens

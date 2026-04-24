@@ -1,11 +1,13 @@
 import time
 import asyncio
 from google import genai
+from google.genai import types
 from google.genai.errors import APIError
 
 from config import GEMINI_API_KEY, logger
 from agent.prompt_registry import get as get_prompt
 from agent.token_manager import token_manager
+from services.terminal_service import terminal_service
 
 
 class GeminiService:
@@ -23,9 +25,13 @@ class GeminiService:
     SYSTEM_PROMPT = (
         "Você é Henricovisky, um agente pessoal de IA que roda localmente no servidor Jarvis do Henrique. "
         "Responda sempre em português do Brasil de forma direta, precisa e sem ser prolixo. "
-        "Você tem acesso a ferramentas locais (Google Drive, transcrição de áudio, geração de PDF). "
-        "Se não souber algo, diga claramente em vez de inventar."
-        "Não se esteendaa muito nas respostas, diga tuudo qqueu precisa ser dito em no máximo 5 frases."
+        "Você é um especialista em Linux e Python. "
+        "Você tem 'Poderes de Terminal': você pode executar comandos bash diretamente no servidor para verificar arquivos, "
+        "verificar processos, logs, ou realizar tarefas administrativas que o usuário solicitar. "
+        "Sempre verifique o resultado do comando antes de confirmar ao usuário. "
+        "Use o terminal com sabedoria e responsabilidade. "
+        "Além disso, você tem acesso ao Google Drive e geração de PDF. "
+        "Não se estenda muito nas respostas, diga tudo que precisa ser dito em no máximo 5 frases."
     )
 
     # Intervalo de espera base (em segundos)
@@ -237,44 +243,70 @@ class GeminiService:
 
     async def chat(self, mensagem: str, historico: list[dict] | None = None) -> str:
         """
-        Envia uma mensagem livre ao Gemini com histórico multi-turno.
-
-        Args:
-            mensagem: O texto enviado pelo usuário neste turno.
-            historico: Lista de dicts [{"role": "user"|"assistant", "content": "..."}]
-                       excluindo a mensagem atual.
-
-        Returns:
-            A resposta textual do modelo.
+        Envia uma mensagem livre ao Gemini com histórico multi-turno e suporte a ferramentas.
         """
         historico = historico or []
 
-        # Constrói prompt combinando system + histórico + mensagem atual
-        partes = [self.SYSTEM_PROMPT, ""]
+        # Configura as ferramentas (tools)
+        def exec_terminal(command: str) -> str:
+            """
+            Executa um comando no terminal Linux do servidor.
+            """
+            return terminal_service.execute(command)
+
+        tools = [exec_terminal]
+
+        # Constrói o histórico no formato esperado pelo SDK (ChatSession)
+        contents = []
         for turno in historico:
-            prefixo = "Usuário" if turno["role"] == "user" else "Assistente"
-            partes.append(f"{prefixo}: {turno['content']}")
-        partes.append(f"Usuário: {mensagem}")
-        partes.append("Assistente:")
-        prompt_completo = "\n".join(partes)
+            role = "user" if turno["role"] == "user" else "model"
+            contents.append({
+                "role": role,
+                "parts": [{"text": turno["content"]}]
+            })
+        
+        # Adiciona a mensagem atual
+        contents.append({
+            "role": "user",
+            "parts": [{"text": mensagem}]
+        })
 
-        # Verifica limite de tamanho
-        if not token_manager.dentro_do_limite(prompt_completo):
-            return (
-                "⚠️ Esse conteúdo excede os limites de contexto suportados. "
-                "Use /memoria_limpar para iniciar uma nova conversa."
-            )
+        # Configuração da sessão de chat com function calling automático
+        config = types.GenerateContentConfig(
+            system_instruction=self.SYSTEM_PROMPT,
+            tools=tools,
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
+        )
 
-        def _call():
-            return self.client.models.generate_content(
-                model=self.MODELO_CHAT,
-                contents=prompt_completo,
-            )
+        try:
+            # Usando generate_content diretamente com o histórico completo para simplificar
+            # e garantir que o system_instruction seja respeitado em cada chamada.
+            def _call():
+                return self.client.models.generate_content(
+                    model=self.MODELO_CHAT,
+                    contents=contents,
+                    config=config
+                )
 
-        resposta = await self._executar_com_retry(_call)
-        texto = resposta.text.strip() if resposta and resposta.text else "(sem resposta)"
+            resposta = await self._executar_com_retry(_call)
+            
+            if not resposta or not resposta.text:
+                # Caso o modelo tenha apenas retornado chamadas de função (o que o automatic_function_calling deve resolver)
+                # ou tenha dado algum erro silencioso.
+                return "Desculpe, não consegui processar sua mensagem."
 
-        token_manager.registrar_uso(self.MODELO_CHAT, len(prompt_completo), len(texto))
+            texto = resposta.text.strip()
+            
+            # Registro de uso aproximado
+            input_chars = 0
+            for c in contents:
+                for p in c.get("parts", []):
+                    input_chars += len(p.get("text", ""))
+            token_manager.registrar_uso(self.MODELO_CHAT, input_chars, len(texto))
 
-        return texto
+            return texto
+
+        except Exception as e:
+            logger.error(f"Erro no chat Gemini: {str(e)}")
+            return f"❌ Erro ao processar mensagem: {str(e)}"
 

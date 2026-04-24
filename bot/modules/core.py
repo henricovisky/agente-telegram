@@ -58,15 +58,15 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📖 *Comandos disponíveis*\n\n"
         "*Qualquer texto livre* — conversa com o agente (Gemini, histórico persistido)\n\n"
-        "*/start* — boas-vindas\n"
-        "*/ajuda* — esta mensagem\n"
-        "*/status* — tokens usados hoje + mensagens na conversa\n"
-        "*/status\\_server* — métricas de CPU, RAM, Disco e rede do servidor\n"
-        "*/update* — git pull + pip install + reinício automático\n"
-        "*/memoria* — mostra histórico persistido do chat\n"
-        "*/memoria\\_limpar* — apaga histórico e inicia nova conversa\n\n"
-        "*/rpg\\_transcrever* — baixa o áudio mais recente do Drive e gera `.txt`\n"
-        "*/rpg\\_resumo* — lê o `.txt` mais recente e gera PDF da Crônica Épica",
+        "/start — boas-vindas\n"
+        "/ajuda — esta mensagem\n"
+        "/status — tokens usados hoje + mensagens na conversa\n"
+        "/status\\_server — métricas de CPU, RAM, Disco e rede do servidor\n"
+        "/update — git pull + pip install + reinício automático\n"
+        "/memoria — mostra histórico persistido do chat\n"
+        "/memoria\\_limpar — apaga histórico e inicia nova conversa\n\n"
+        "/rpg\\_transcrever — baixa o áudio mais recente do Drive e gera `.txt`\n"
+        "/rpg\\_resumo — lê o `.txt` mais recente e gera PDF da Crônica Épica",
         parse_mode="Markdown",
     )
 
@@ -87,6 +87,7 @@ async def status_server(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # CPU
     cpu_pct = psutil.cpu_percent(interval=0.5)
     cpu_count = psutil.cpu_count(logical=True)
+    cpu_freq = psutil.cpu_freq()
 
     # RAM
     ram = psutil.virtual_memory()
@@ -98,8 +99,18 @@ async def status_server(update: Update, context: ContextTypes.DEFAULT_TYPE):
     disk_used = _fmt_bytes(disk.used)
     disk_total = _fmt_bytes(disk.total)
 
+    # Rede (IPs locais)
+    ips = []
+    for interface, addrs in psutil.net_if_addrs().items():
+        for addr in addrs:
+            if addr.family == 2:  # AF_INET
+                if not addr.address.startswith("127."):
+                    ips.append(f"{interface}: `{addr.address}`")
+    ips_str = "\n".join(ips) if ips else "Nenhum IP local encontrado"
+
     # Uptime do sistema operacional
     sys_uptime = time.time() - psutil.boot_time()
+    boot_time = datetime.datetime.fromtimestamp(psutil.boot_time()).strftime("%Y-%m-%d %H:%M:%S")
 
     # Uptime do bot (processo atual)
     bot_uptime = time.time() - _BOT_START
@@ -107,6 +118,26 @@ async def status_server(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Processo Python atual (RAM do bot)
     proc = psutil.Process(os.getpid())
     bot_ram = _fmt_bytes(proc.memory_info().rss)
+
+    # Info do Sistema (OS, Kernel)
+    import platform
+    os_name = platform.system()
+    os_release = platform.release()
+    os_version = platform.version()
+    
+    distro_str = ""
+    if os_name == "Linux":
+        try:
+            with open("/etc/os-release") as f:
+                lines = f.readlines()
+                for line in lines:
+                    if line.startswith("PRETTY_NAME="):
+                        distro_str = line.split("=")[1].strip().replace('"', '')
+                        break
+        except:
+            distro_str = "Linux (distro desconhecida)"
+    else:
+        distro_str = f"{os_name} {os_release}"
 
     # Load average (Linux) ou CPU percent (Windows)
     try:
@@ -117,14 +148,18 @@ async def status_server(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = (
         "🖥️ *Status do Servidor*\n\n"
+        f"🐧 *Sistema:* `{distro_str}`\n"
+        f"🏗 *Kernel:* `{os_release}`\n"
+        f"🗓 *Boot:* `{boot_time}`\n"
         f"⏱ *Uptime SO:* `{_fmt_uptime(sys_uptime)}`\n"
         f"🤖 *Uptime Bot:* `{_fmt_uptime(bot_uptime)}`\n\n"
-        f"🧠 *CPU:* `{cpu_pct}%` ({cpu_count} cores)\n"
+        f"🧠 *CPU:* `{cpu_pct}%` ({cpu_count} cores @ {cpu_freq.current if cpu_freq else 'N/A'}MHz)\n"
         f"📈 *Load avg (1/5/15m):* `{load_str}`\n\n"
         f"💾 *RAM total:* `{ram_total}`\n"
         f"   Usada: `{ram_used}` ({ram.percent}%)\n"
         f"   Bot:   `{bot_ram}`\n\n"
-        f"💿 *Disco (/):* `{disk_used}` / `{disk_total}` ({disk.percent}%)\n"
+        f"💿 *Disco (/):* `{disk_used}` / `{disk_total}` ({disk.percent}%)\n\n"
+        f"🌐 *Rede (IPs):*\n{ips_str}"
     )
 
     await update.message.reply_text(msg, parse_mode="Markdown")
