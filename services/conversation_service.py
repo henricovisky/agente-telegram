@@ -38,6 +38,7 @@ class ConversationService:
                     id       TEXT PRIMARY KEY,
                     user_id  TEXT NOT NULL,
                     provider TEXT NOT NULL DEFAULT 'gemini',
+                    persona  TEXT NOT NULL DEFAULT 'henricovisky',
                     created_at TEXT NOT NULL
                 )
             """)
@@ -76,8 +77,8 @@ class ConversationService:
                 return row["id"]
             conv_id = str(uuid.uuid4())
             conn.execute(
-                "INSERT INTO conversations (id, user_id, provider, created_at) VALUES (?,?,?,?)",
-                (conv_id, uid, provider, datetime.utcnow().isoformat()),
+                "INSERT INTO conversations (id, user_id, provider, persona, created_at) VALUES (?,?,?,?,?)",
+                (conv_id, uid, provider, 'henricovisky', datetime.utcnow().isoformat()),
             )
             return conv_id
 
@@ -100,6 +101,25 @@ class ConversationService:
                 (conv_id, uid, provider, datetime.utcnow().isoformat()),
             )
             return conv_id
+
+    def get_persona(self, user_id: int) -> str:
+        """Retorna a persona atual da conversa ativa."""
+        uid = str(user_id)
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT persona FROM conversations WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                (uid,),
+            ).fetchone()
+            return row["persona"] if row else "henricovisky"
+
+    def set_persona(self, user_id: int, persona_key: str):
+        """Atualiza a persona da conversa ativa."""
+        conv_id = self.get_or_create_conversation(user_id)
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE conversations SET persona = ? WHERE id = ?",
+                (persona_key, conv_id),
+            )
 
     # ------------------------------------------------------------------
     # Mensagens

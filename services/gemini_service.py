@@ -7,7 +7,9 @@ from google.genai.errors import APIError
 from config import GEMINI_API_KEY, logger
 from agent.prompt_registry import get as get_prompt
 from agent.token_manager import token_manager
+from agent.persona_registry import get_persona
 from services.terminal_service import terminal_service
+from services.conversation_service import conversation_service
 
 
 class GeminiService:
@@ -255,7 +257,7 @@ class GeminiService:
 
         return cronica or "Erro ao gerar crônica."
 
-    async def chat(self, mensagem: str, historico: list[dict] | None = None) -> str:
+    async def chat(self, mensagem: str, user_id: int, historico: list[dict] | None = None) -> str:
         """
         Envia uma mensagem livre ao Gemini com suporte a ferramentas e fallback multi-modelo.
         """
@@ -286,13 +288,16 @@ class GeminiService:
             try:
                 logger.info(f"💬 Chat com modelo: {modelo_atual}")
                 
+                persona_key = conversation_service.get_persona(user_id)
+                persona = get_persona(persona_key)
+                
                 if "gemma" in modelo_atual:
                     config = types.GenerateContentConfig(
                         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
                     )
                 else:
                     config = types.GenerateContentConfig(
-                        system_instruction=self.SYSTEM_PROMPT,
+                        system_instruction=persona["prompt"],
                         tools=tools,
                         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
                     )

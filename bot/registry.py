@@ -1,7 +1,7 @@
 from telegram.ext import CommandHandler, MessageHandler, filters
 
 from bot.middleware import autorizados_apenas
-from bot.modules import core, rpg, admin, chat, monitoring
+from bot.modules import core, rpg, admin, chat, monitoring, persona
 from telegram import BotCommand
 
 # Lista de comandos para o menu (BotCommand)
@@ -15,6 +15,7 @@ COMANDOS_MENU = [
     BotCommand("rpg_transcrever", "Transcrever áudio de RPG do Drive"),
     BotCommand("rpg_resumo", "Gerar Crônica Épica em PDF"),
     BotCommand("logs", "Ver últimos logs do sistema"),
+    BotCommand("persona", "Mudar personalidade do agente"),
     BotCommand("update", "Atualizar bot via GitHub"),
 ]
 
@@ -40,6 +41,12 @@ def registrar(app):
     app.add_handler(CommandHandler("rpg_transcrever", autorizados_apenas(rpg.rpg_transcrever)))
     app.add_handler(CommandHandler("rpg_resumo",      autorizados_apenas(rpg.rpg_resumo)))
     app.add_handler(CommandHandler("logs",            autorizados_apenas(monitoring.logs)))
+    app.add_handler(CommandHandler("persona",         autorizados_apenas(persona.persona_cmd)))
+    
+    # Atalhos de personas
+    from agent.persona_registry import PERSONAS
+    for p_key in PERSONAS.keys():
+        app.add_handler(CommandHandler(p_key, autorizados_apenas(persona.trocar_persona)))
 
     # --- Chat livre (deve ser o ÚLTIMO handler para não interceptar comandos) ---
     app.add_handler(

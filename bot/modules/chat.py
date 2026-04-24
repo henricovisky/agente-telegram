@@ -56,7 +56,7 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         typing_task = asyncio.create_task(_keep_typing())
         try:
-            resposta = await _gemini.chat(mensagem, historico)
+            resposta = await _gemini.chat(mensagem, chat_id, historico)
         finally:
             typing_task.cancel()
 
