@@ -40,35 +40,42 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🧠 *Henricovisky* — Agente IA Pessoal\n\n"
         "Envie qualquer mensagem de texto para conversar com o agente.\n"
         "Ou use um dos comandos abaixo:\n\n"
-        "*Core:*\n"
-        "/ajuda — lista de comandos\n"
+        "*Core & Admin:*\n"
+        "/ajuda — lista detalhada de comandos\n"
         "/status — uso de tokens hoje\n"
         "/status\\_server — métricas do servidor\n"
         "/update — atualiza o bot via GitHub\n"
-        "/memoria — histórico do chat\n"
-        "/memoria\\_limpar — apagar histórico\n"
         "/logs — ver últimos logs do servidor\n\n"
+        "*Memória & Personas:*\n"
+        "/persona — listar e trocar personalidade\n"
+        "/memoria — ver histórico do chat\n"
+        "/memoria\\_limpar — apagar histórico\n\n"
         "*Módulo RPG:*\n"
-        "/rpg\\_transcrever — transcreve o áudio mais recente do Drive\n"
-        "/rpg\\_resumo — gera Crônica Épica em PDF a partir da transcrição",
+        "/rpg\\_transcrever — transcreve áudio do Drive\n"
+        "/rpg\\_resumo — gera Crônica Épica em PDF",
         parse_mode="Markdown",
     )
 
 
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from agent.persona_registry import list_personas
     await update.message.reply_text(
-        "📖 *Comandos disponíveis*\n\n"
-        "*Qualquer texto livre* — conversa com o agente (Gemini, histórico persistido)\n\n"
-        "/start — boas-vindas\n"
-        "/ajuda — esta mensagem\n"
+        "📖 *Guia de Comandos*\n\n"
+        "*Qualquer texto* — conversa com o agente (Gemini + Memória RAG)\n\n"
+        "*Sistema & Admin:*\n"
         "/status — tokens usados hoje + mensagens na conversa\n"
-        "/status\\_server — métricas de CPU, RAM, Disco e rede do servidor\n"
-        "/update — git pull + pip install + reinício automático\n"
-        "/memoria — mostra histórico persistido do chat\n"
-        "/memoria\\_limpar — apaga histórico e inicia nova conversa\n"
-        "/logs [serviço] — mostra as últimas 20 linhas de logs do systemd\n\n"
-        "/rpg\\_transcrever — baixa o áudio mais recente do Drive e gera `.txt`\n"
-        "/rpg\\_resumo — lê o `.txt` mais recente e gera PDF da Crônica Épica",
+        "/status\\_server — métricas de hardware do servidor\n"
+        "/update — faz pull do código e reinicia o bot\n"
+        "/logs [serviço] — ver logs do journalctl\n\n"
+        "*Memória & Contexto:*\n"
+        "/memoria — mostra o histórico persistido (contexto atual)\n"
+        "/memoria\\_limpar — limpa o histórico da conversa atual\n\n"
+        "*Personas (IA):*\n"
+        "/persona — lista as personalidades disponíveis\n"
+        f"{list_personas()}\n\n"
+        "*Módulo RPG:*\n"
+        "/rpg\\_transcrever — processa o áudio mais recente do Drive\n"
+        "/rpg\\_resumo — gera Crônica Épica em PDF a partir da última transcrição",
         parse_mode="Markdown",
     )
 

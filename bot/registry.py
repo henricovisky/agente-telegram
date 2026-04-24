@@ -6,17 +6,23 @@ from telegram import BotCommand
 
 # Lista de comandos para o menu (BotCommand)
 COMANDOS_MENU = [
-    BotCommand("start", "Boas-vindas e lista de módulos"),
-    BotCommand("ajuda", "Todos os comandos disponíveis"),
-    BotCommand("status", "Tokens Gemini usados hoje"),
-    BotCommand("status_server", "Métricas do servidor (CPU, RAM, Rede)"),
-    BotCommand("memoria", "Ver histórico do chat"),
-    BotCommand("memoria_limpar", "Apagar histórico e iniciar nova conversa"),
-    BotCommand("rpg_transcrever", "Transcrever áudio de RPG do Drive"),
-    BotCommand("rpg_resumo", "Gerar Crônica Épica em PDF"),
-    BotCommand("logs", "Ver últimos logs do sistema"),
-    BotCommand("persona", "Mudar personalidade do agente"),
-    BotCommand("update", "Atualizar bot via GitHub"),
+    BotCommand("start", "Início e boas-vindas"),
+    BotCommand("ajuda", "Lista completa de comandos"),
+    BotCommand("status", "Tokens usados hoje"),
+    BotCommand("status_server", "Status do hardware"),
+    BotCommand("persona", "Trocar personalidade"),
+    BotCommand("memoria", "Ver contexto do chat"),
+    BotCommand("memoria_limpar", "Limpar histórico"),
+    BotCommand("rpg_transcrever", "Transcrever áudio Drive"),
+    BotCommand("rpg_resumo", "Gerar Crônica PDF"),
+    BotCommand("logs", "Ver logs do servidor"),
+    BotCommand("update", "Atualizar via GitHub"),
+    # Atalhos rápidos de personas
+    BotCommand("henricovisky", "Persona: Especialista Linux/Python"),
+    BotCommand("mestre", "Persona: Mestre de RPG"),
+    BotCommand("dev", "Persona: Senior Developer"),
+    BotCommand("financeiro", "Persona: Analista Financeiro"),
+    BotCommand("curto", "Persona: Modo Direto"),
 ]
 
 
