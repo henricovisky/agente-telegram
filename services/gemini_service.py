@@ -19,11 +19,11 @@ class GeminiService:
     # Modelos Principais
     MODELO_TRANSCRICAO = 'gemini-2.5-flash-lite'
     MODELO_CRONICA     = 'gemini-2.5-flash-lite'
-    MODELO_CHAT        = 'gemini-3-flash-preview'
+    MODELO_CHAT        = 'gemini-3-flash-lite-preview'
 
     # Modelos de Backup (solicitados pelo usuário)
     MODELOS_BACKUP = [
-        'gemini-3.1-flash-lite-preview',
+        'gemini-3.1-flash-preview',
         'gemma-4-26b-a4b-it',
         'gemma-3-27b-it',
         'gemma-3-4b-it'
@@ -38,8 +38,8 @@ class GeminiService:
         "verificar processos, logs, ou realizar tarefas administrativas que o usuário solicitar. "
         "Sempre verifique o resultado do comando antes de confirmar ao usuário. "
         "Use o terminal com sabedoria e responsabilidade. "
-        "Além disso, você tem acesso ao Google Drive e geração de PDF. "
-        "Não se estenda muito nas respostas, diga tudo que precisa ser dito em no máximo 5 frases."
+        "Além disso, você tem acesso às ferramentas Google e geração de PDF. "
+        "Não se estenda muito nas respostas, diga tudo que precisa ser dito e sem floreios. Mas pode usar emojis para dar mais vida as respostas."
     )
 
     # Intervalo de espera base (em segundos)
