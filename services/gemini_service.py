@@ -14,9 +14,19 @@ class GeminiService:
     Responsável por: upload de arquivos pesados via File API,
     transcrição de áudio e geração da crônica épica de RPG.
     """
-    # Modelos atualizados para a nova SDK
+    # Modelos
     MODELO_TRANSCRICAO = 'gemini-2.5-flash-lite'
-    MODELO_CRONICA = 'gemini-2.5-flash-lite'
+    MODELO_CRONICA     = 'gemini-2.5-flash-lite'
+    MODELO_CHAT        = 'gemini-3-flash-preview'
+
+    # System prompt do agente pessoal
+    SYSTEM_PROMPT = (
+        "Você é Henricovisky, um agente pessoal de IA que roda localmente no servidor Jarvis do Henrique. "
+        "Responda sempre em português do Brasil de forma direta, precisa e sem ser prolixo. "
+        "Você tem acesso a ferramentas locais (Google Drive, transcrição de áudio, geração de PDF). "
+        "Se não souber algo, diga claramente em vez de inventar."
+        "Não se esteendaa muito nas respostas, diga tuudo qqueu precisa ser dito em no máximo 5 frases."
+    )
 
     # Intervalo de espera base (em segundos)
     INTERVALO_ESPERA_SEGUNDOS = 30
@@ -225,4 +235,46 @@ class GeminiService:
 
         return cronica
 
+    async def chat(self, mensagem: str, historico: list[dict] | None = None) -> str:
+        """
+        Envia uma mensagem livre ao Gemini com histórico multi-turno.
+
+        Args:
+            mensagem: O texto enviado pelo usuário neste turno.
+            historico: Lista de dicts [{"role": "user"|"assistant", "content": "..."}]
+                       excluindo a mensagem atual.
+
+        Returns:
+            A resposta textual do modelo.
+        """
+        historico = historico or []
+
+        # Constrói prompt combinando system + histórico + mensagem atual
+        partes = [self.SYSTEM_PROMPT, ""]
+        for turno in historico:
+            prefixo = "Usuário" if turno["role"] == "user" else "Assistente"
+            partes.append(f"{prefixo}: {turno['content']}")
+        partes.append(f"Usuário: {mensagem}")
+        partes.append("Assistente:")
+        prompt_completo = "\n".join(partes)
+
+        # Verifica limite de tamanho
+        if not token_manager.dentro_do_limite(prompt_completo):
+            return (
+                "⚠️ Esse conteúdo excede os limites de contexto suportados. "
+                "Use /memoria_limpar para iniciar uma nova conversa."
+            )
+
+        def _call():
+            return self.client.models.generate_content(
+                model=self.MODELO_CHAT,
+                contents=prompt_completo,
+            )
+
+        resposta = await self._executar_com_retry(_call)
+        texto = resposta.text.strip() if resposta and resposta.text else "(sem resposta)"
+
+        token_manager.registrar_uso(self.MODELO_CHAT, len(prompt_completo), len(texto))
+
+        return texto
 
