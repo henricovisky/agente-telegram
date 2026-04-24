@@ -43,7 +43,6 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Persiste a mensagem do usuário antes de chamar o LLM
         conversation_service.add_message(chat_id, "user", mensagem)
 
-        # Chama o LLM — pode demorar; reenvia typing a cada 4s para não expirar
         async def _keep_typing():
             while True:
                 await asyncio.sleep(4)
@@ -54,9 +53,22 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 except Exception:
                     break
 
+        async def _on_thought(thought_text: str):
+            """Callback para exibir o raciocínio do agente em tempo real."""
+            logger.info(f"🧠 Raciocínio enviado para {chat_id}: {thought_text[:50]}...")
+            # Envia o raciocínio como uma mensagem separada, formatada em itálico
+            try:
+                await context.bot.send_message(
+                    chat_id=chat_id, 
+                    text=f"🧠 *Raciocínio:*\n_{thought_text}_",
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                logger.error(f"Erro ao enviar thought: {e}")
+
         typing_task = asyncio.create_task(_keep_typing())
         try:
-            resposta = await _gemini.chat(mensagem, chat_id, historico)
+            resposta = await _gemini.chat(mensagem, chat_id, historico, on_thought=_on_thought)
         finally:
             typing_task.cancel()
 

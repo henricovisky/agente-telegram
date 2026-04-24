@@ -1,5 +1,8 @@
 import time
 import asyncio
+import re
+import math
+import textwrap
 from google import genai
 from google.genai import types
 from google.genai.errors import APIError
@@ -49,7 +52,6 @@ class GeminiService:
         """
         Executa uma função síncrona com retry em caso de Rate Limit (429) ou 503.
         """
-        import re
         loop = asyncio.get_running_loop()
         tentativa = 0
         while tentativa < self.MAX_RETRIES:
@@ -113,9 +115,6 @@ class GeminiService:
         if len(transcricao) > LIMITE_CARACTERES:
             logger.info(f"Transcrição longa ({len(transcricao)} caracteres). Iniciando processo RAG...")
             
-            import textwrap
-            import math
-            
             def _get_cosine_similarity(v1, v2):
                 dot = sum(a * b for a, b in zip(v1, v2))
                 norm1 = math.sqrt(sum(a * a for a in v1))
@@ -172,7 +171,7 @@ class GeminiService:
             except Exception: continue
         return "Erro ao gerar crônica."
 
-    async def chat(self, mensagem: str, user_id: int, historico: list[dict] | None = None) -> str:
+    async def chat(self, mensagem: str, user_id: int, historico: list[dict] | None = None, on_thought: callable = None) -> str:
         """Chat com histórico, compressão automática e RAG pessoal."""
         historico = historico or []
         
@@ -195,24 +194,40 @@ class GeminiService:
         memoria_contexto = await self.ltm.get_relevant_context(user_id, mensagem)
 
         # 3. Ferramentas (Tools)
-        def exec_terminal(command: str) -> str: return terminal_service.execute(command)
-        async def lembrar_fato(fato: str) -> str:
+        # Definimos as funções que podem ser chamadas
+        async def exec_terminal_tool(command: str) -> str:
+            return terminal_service.execute(command)
+
+        async def lembrar_fato_tool(fato: str) -> str:
             ok = await self.ltm.save_fact(user_id, fato)
             return "Fato memorizado com sucesso." if ok else "Erro ao memorizar fato."
 
+        # Mapeamento para execução manual
+        tool_map = {
+            "exec_terminal": exec_terminal_tool,
+            "lembrar_fato": lembrar_fato_tool
+        }
+        
+        # Lista de definições para o Gemini (apenas funções síncronas para definição ou adaptadas)
+        # O SDK prefere funções reais para extrair schema, mas como vamos rodar manual, 
+        # podemos passar as funções e desabilitar o automatic calling.
+        def exec_terminal(command: str) -> str: ...
+        def lembrar_fato(fato: str) -> str: ...
+        
         tools = [exec_terminal, lembrar_fato]
 
-        # 4. Formata conteúdos
+        # 4. Formata conteúdos (Histórico + Mensagem Atual)
         contents = []
         for turno in historico:
             role = "user" if turno["role"] == "user" else "model"
-            contents.append({"role": role, "parts": [{"text": turno["content"]}]})
+            contents.append(types.Content(role=role, parts=[types.Part(text=turno["content"])]))
         
-        contents.append({"role": "user", "parts": [{"text": mensagem}]})
+        contents.append(types.Content(role="user", parts=[types.Part(text=mensagem)]))
 
-        # 5. Tentativa de resposta com Fallback
+        # 5. Tentativa de resposta com Fallback e Loop ReAct
         modelos_tentativa = [self.MODELO_CHAT] + self.MODELOS_BACKUP
         ultima_excecao = None
+        
         for modelo_atual in modelos_tentativa:
             try:
                 persona_key = conversation_service.get_persona(user_id)
@@ -220,32 +235,97 @@ class GeminiService:
                 
                 sys_inst = persona["prompt"]
                 if memoria_contexto:
-                    sys_inst += f"\n\n{memoria_contexto}"
+                    sys_inst += f"\n\nContexto da sua memória sobre este usuário:\n{memoria_contexto}"
 
+                # Se for Gemma, desabilita ferramentas por enquanto (suporte limitado)
                 if "gemma" in modelo_atual:
-                    config = types.GenerateContentConfig(automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
+                    tools_to_use = None
                 else:
+                    tools_to_use = tools
+
+                # Loop ReAct manual
+                max_steps = 5
+                current_step = 0
+                while current_step < max_steps:
+                    current_step += 1
+                    
                     config = types.GenerateContentConfig(
                         system_instruction=sys_inst,
-                        tools=tools,
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
+                        tools=tools_to_use,
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
                     )
 
-                def _call(): return self.client.models.generate_content(model=modelo_atual, contents=contents, config=config)
-                resposta = await self._executar_com_retry(_call)
-                if not resposta or not resposta.text: continue
+                    def _call(): return self.client.models.generate_content(model=modelo_atual, contents=contents, config=config)
+                    resposta = await self._executar_com_retry(_call)
+                    
+                    if not resposta or not resposta.candidates:
+                        break
 
-                texto = resposta.text.strip()
-                input_chars = sum(len(p.get("text", "")) for c in contents for p in c.get("parts", []))
-                token_manager.registrar_uso(modelo_atual, input_chars, len(texto))
-                return texto
+                    candidate = resposta.candidates[0]
+                    parts = candidate.content.parts
+                    
+                    # Adiciona a resposta do modelo ao histórico da chamada atual
+                    contents.append(candidate.content)
+                    
+                    # 1. Processa Texto e Thoughts
+                    thought_found = False
+                    for part in parts:
+                        if part.text:
+                            texto = part.text
+                            # Extrai <thought> se existir
+                            match = re.search(r"<thought>(.*?)</thought>", texto, re.DOTALL)
+                            if match and on_thought:
+                                thought_text = match.group(1).strip()
+                                await on_thought(thought_text)
+                                thought_found = True
+                            elif thought_found and on_thought:
+                                # Se já achamos um thought mas tem mais texto, pode ser parte do mesmo ou resposta final
+                                pass
+
+                    # 2. Processa Function Calls
+                    function_calls = [p.function_call for p in parts if p.function_call]
+                    
+                    if not function_calls:
+                        # Resposta final (texto)
+                        texto_final = "".join([p.text for p in parts if p.text])
+                        token_manager.registrar_uso(modelo_atual, 0, len(texto_final)) # Input já contado no loop
+                        return texto_final
+
+                    # Executa ferramentas
+                    tool_parts = []
+                    for fc in function_calls:
+                        name = fc.name
+                        args = fc.args
+                        logger.info(f"🛠️ Executando ferramenta: {name}({args})")
+                        
+                        if name in tool_map:
+                            try:
+                                result = await tool_map[name](**args)
+                            except Exception as e:
+                                result = f"Erro ao executar {name}: {str(e)}"
+                        else:
+                            result = f"Ferramenta {name} não encontrada."
+                        
+                        tool_parts.append(types.Part(
+                            function_response=types.FunctionResponse(
+                                name=name,
+                                response={"result": result}
+                            )
+                        ))
+                    
+                    # Adiciona resultados das ferramentas ao contexto
+                    contents.append(types.Content(role="user", parts=tool_parts))
+                
+                # Se saiu do loop por max_steps
+                return "A tarefa foi muito complexa e atingiu o limite de passos."
 
             except Exception as e:
                 ultima_excecao = e
                 if any(err in str(e).lower() for err in ["429", "quota", "503", "limit"]):
                     logger.warning(f"⚠️ {modelo_atual} sem cota. Próximo...")
+                    contents = contents[:len(historico)+1] # Reseta contents para o próximo modelo
                     continue
-                logger.error(f"Erro em {modelo_atual}: {e}")
+                logger.error(f"Erro em {modelo_atual}: {e}", exc_info=True)
                 break
 
         return f"❌ Todos os modelos falharam. Último erro: {str(ultima_excecao)}"

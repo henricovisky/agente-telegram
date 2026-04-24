@@ -9,7 +9,7 @@
 | **Memória de longo prazo (RAG pessoal)** | ✅ Concluído: Armazenamento de fatos em SQLite com embeddings e busca semântica. | Alta |
 | **Personas intercambiáveis** | ✅ Concluído: Sistema de registro e troca de personas (/persona) implementado. | Média |
 | **Resumo automático da conversa** | ✅ Concluído: Compressão automática de histórico quando excede 16 mensagens. | Baixa |
-| **Modo planejador (ReAct)** | Para tarefas complexas, o agente planeja os passos antes de executar (chain-of-thought explícito), mostrando o raciocínio ao usuário. | Alta |
+| **Modo planejador (ReAct)** | ✅ Concluído: O agente agora planeja passos e exibe o raciocínio explicitamente em tarefas complexas. | Alta |
 
 ---
 
