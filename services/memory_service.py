@@ -26,6 +26,16 @@ class MemoryService:
                     output_tokens INTEGER DEFAULT 0
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_facts (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id     TEXT    NOT NULL,
+                    fact        TEXT    NOT NULL,
+                    embedding   BLOB    NOT NULL,
+                    created_at  TEXT    NOT NULL
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_facts_user ON user_facts(user_id)")
 
     def registrar_tokens(self, model: str, input_tokens: int, output_tokens: int):
         today = date.today().isoformat()
@@ -46,6 +56,26 @@ class MemoryService:
         if not rows:
             return "Sem uso hoje."
         return "\n".join(f"  {m}: {i}in / {o}out tokens" for m, i, o in rows)
+
+    # --- RAG / Long Term Memory ---
+
+    def salvar_fato(self, user_id: str, fact: str, embedding: list[float]):
+        import json
+        from datetime import datetime
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO user_facts (user_id, fact, embedding, created_at) VALUES (?,?,?,?)",
+                (user_id, fact, json.dumps(embedding), datetime.utcnow().isoformat())
+            )
+
+    def buscar_fatos(self, user_id: str) -> list[dict]:
+        import json
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT fact, embedding FROM user_facts WHERE user_id = ?",
+                (user_id,)
+            ).fetchall()
+        return [{"fact": r["fact"], "embedding": json.loads(r["embedding"])} for r in rows]
 
 
 # Singleton

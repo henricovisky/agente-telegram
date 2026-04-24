@@ -6,9 +6,9 @@
 
 | Ideia | Descrição | Complexidade |
 |---|---|---|
-| **Memória de longo prazo (RAG pessoal)** | Salvar fatos importantes do usuário em SQLite + recuperar via embedding antes de cada resposta. Ex: "Moro em SP, trabalho às 8h, time o Corinthians." | Alta |
-| **Personas intercambiáveis** | `/persona [nome]` troca o SYSTEM_PROMPT em runtime. Ex: `/persona dev` = modo técnico, `/persona amigo` = casual. | Média |
-| **Resumo automático da conversa** | Quando o histórico ultrapassar N tokens, comprimir automaticamente via Gemini (já há `compress.historico` no `prompt_registry`). | Baixa |
+| **Memória de longo prazo (RAG pessoal)** | ✅ Concluído: Armazenamento de fatos em SQLite com embeddings e busca semântica. | Alta |
+| **Personas intercambiáveis** | ✅ Concluído: Sistema de registro e troca de personas (/persona) implementado. | Média |
+| **Resumo automático da conversa** | ✅ Concluído: Compressão automática de histórico quando excede 16 mensagens. | Baixa |
 | **Modo planejador (ReAct)** | Para tarefas complexas, o agente planeja os passos antes de executar (chain-of-thought explícito), mostrando o raciocínio ao usuário. | Alta |
 
 ---
