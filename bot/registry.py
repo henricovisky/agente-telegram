@@ -2,7 +2,7 @@ from telegram.ext import CommandHandler, MessageHandler, filters
 
 from bot.middleware import autorizados_apenas
 from bot.modules import core, rpg, admin, chat, monitoring, persona
-from telegram import BotCommand
+from telegram import BotCommand, BotCommandScopeAllPrivateChats
 
 # Lista de comandos para o menu (BotCommand)
 COMANDOS_MENU = [
@@ -27,8 +27,11 @@ COMANDOS_MENU = [
 
 
 async def configurar_menu(app):
-    """Define a lista de comandos que aparece no menu do Telegram."""
-    await app.bot.set_my_commands(COMANDOS_MENU)
+    """Define a lista de comandos que aparece no menu do Telegram (escopo privado)."""
+    await app.bot.set_my_commands(
+        COMANDOS_MENU,
+        scope=BotCommandScopeAllPrivateChats()
+    )
 
 
 def registrar(app):
