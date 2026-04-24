@@ -16,10 +16,18 @@ class GeminiService:
     Responsável por: upload de arquivos pesados via File API,
     transcrição de áudio e geração da crônica épica de RPG.
     """
-    # Modelos
+    # Modelos Principais
     MODELO_TRANSCRICAO = 'gemini-2.5-flash-lite'
     MODELO_CRONICA     = 'gemini-2.5-flash-lite'
     MODELO_CHAT        = 'gemini-3-flash-preview'
+
+    # Modelos de Backup (solicitados pelo usuário)
+    MODELOS_BACKUP = [
+        'gemini-3.1-flash-lite-preview',
+        'gemma-4-26b-a4b-it',
+        'gemma-3-27b-it',
+        'gemma-3-4b-it'
+    ]
 
     # System prompt do agente pessoal
     SYSTEM_PROMPT = (
@@ -64,22 +72,17 @@ class GeminiService:
                 if any(err in msg for err in ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE"]):
                     
                     # --- Detecção de quota diária esgotada (NÃO recuperável com retry) ---
-                    # Quando "limit: 0" aparece, a cota do dia ou do projeto acabou.
-                    # Tentar de novo nunca vai funcionar — falha imediata.
                     if "limit: 0" in msg or "PerDay" in msg:
-                        logger.error("Cota diária do Gemini esgotada. Não é possível recuperar via retry.")
-                        raise RuntimeError(
-                            "⚠️ A cota diária da API do Gemini foi esgotada. "
-                            "Aguarde a renovação (geralmente meia-noite, horário do Pacífico) "
-                            "ou ative o faturamento no Google AI Studio."
-                        )
+                        logger.error("Cota diária do Gemini esgotada.")
+                        # Lançamos uma exceção específica para o fallback capturar
+                        raise RuntimeError(f"QUOTA_EXHAUSTED: {msg}")
 
                     tentativa += 1
                     
                     # Backoff exponencial base
                     espera = float(self.INTERVALO_ESPERA_SEGUNDOS * (2 ** (tentativa - 1)))
                     
-                    # Tentar extrair o tempo de espera exato da mensagem (ex: "Please retry in 23.87s")
+                    # Tentar extrair o tempo de espera exato da mensagem
                     match = re.search(r"retry in ([\d\.]+)s", msg)
                     if match:
                         try:
@@ -128,17 +131,34 @@ class GeminiService:
 
         ficheiro_ativo = await loop.run_in_executor(None, _aguardar_active)
 
-        # Passo 3: Transcrever com retry
-        logger.info(f"Transcrevendo o áudio com o modelo {self.MODELO_TRANSCRICAO}...")
-        
-        def _call_generate():
-            return self.client.models.generate_content(
-                model=self.MODELO_TRANSCRICAO,
-                contents=[ficheiro_ativo, "Por favor, transcreve este áudio."]
-            )
-            
-        resposta = await self._executar_com_retry(_call_generate)
-        transcricao = resposta.text
+        # Passo 3: Transcrever com retry e fallback de modelo
+        modelos = [self.MODELO_TRANSCRICAO] + self.MODELOS_BACKUP
+        transcricao = None
+        ultima_excecao = None
+
+        for modelo_atual in modelos:
+            if "gemma" in modelo_atual:
+                continue
+
+            logger.info(f"Tentando transcrição com o modelo {modelo_atual}...")
+            try:
+                def _call_generate():
+                    return self.client.models.generate_content(
+                        model=modelo_atual,
+                        contents=[ficheiro_ativo, "Por favor, transcreve este áudio."]
+                    )
+                resposta = await self._executar_com_retry(_call_generate)
+                transcricao = resposta.text
+                break
+            except Exception as e:
+                ultima_excecao = e
+                if "QUOTA_EXHAUSTED" in str(e):
+                    logger.warning(f"Cota esgotada para {modelo_atual}. Tentando próximo...")
+                    continue
+                raise e
+
+        if not transcricao:
+            raise ultima_excecao or RuntimeError("Falha total na transcrição.")
 
         # Passo 4: Apagar
         def _delete():
@@ -152,17 +172,14 @@ class GeminiService:
     async def gerar_cronica_epica(self, transcricao: str) -> str:
         """
         Gera uma crônica épica de RPG em Markdown usando o modelo Gemini.
-        Utiliza RAG (Retrieval-Augmented Generation) para reduzir textos longos
-        e poupar tokens.
+        Utiliza RAG (Retrieval-Augmented Generation) para reduzir textos longos.
         """
-        logger.info(f"Gerando a Crônica Épica com o modelo {self.MODELO_CRONICA}...")
-        
-        loop = asyncio.get_running_loop()
+        logger.info(f"Gerando a Crônica Épica...")
         
         # --- Lógica de RAG para reduzir tamanho da transcrição ---
         LIMITE_CARACTERES = 15000
         if len(transcricao) > LIMITE_CARACTERES:
-            logger.info(f"Transcrição longa ({len(transcricao)} caracteres). Iniciando processo RAG para redução...")
+            logger.info(f"Transcrição longa ({len(transcricao)} caracteres). Iniciando processo RAG...")
             
             import textwrap
             import math
@@ -174,9 +191,7 @@ class GeminiService:
                 if norm1 == 0 or norm2 == 0: return 0.0
                 return dot / (norm1 * norm2)
             
-            # 1. Divisão em chunks
             chunks = textwrap.wrap(transcricao, width=1500, break_long_words=False, replace_whitespace=False)
-            logger.info(f"Texto dividido em {len(chunks)} chunks. Gerando embeddings...")
             
             def _embed(texts):
                 return self.client.models.embed_content(
@@ -184,7 +199,6 @@ class GeminiService:
                     contents=texts
                 )
             
-            # Embeddings dos chunks (em lotes para evitar erro de limite)
             embeddings_chunks = []
             lote_tamanho = 100
             for i in range(0, len(chunks), lote_tamanho):
@@ -193,70 +207,65 @@ class GeminiService:
                 for e in res.embeddings:
                     embeddings_chunks.append(e.values)
                     
-            # 2. Definição das queries do RAG para as seções necessárias
             queries = [
-                "início da sessão e recapitulação do que aconteceu antes",
-                "combates épicos, lutas, batalhas, magias lançadas, ataques, dano, mortes, rolagens de dados",
-                "roleplay, conversas marcantes, piadas, interações engraçadas, decisões de história e NPCs",
-                "regras de Dungeons and Dragons 5e, táticas, dicas de sobrevivência, uso de habilidades"
+                "início da sessão e recapitulação",
+                "combates épicos, lutas, magias",
+                "roleplay, conversas marcantes, piadas",
+                "regras de Dungeons and Dragons 5e"
             ]
             
             res_queries = await self._executar_com_retry(_embed, queries)
             embeddings_queries = [e.values for e in res_queries.embeddings]
             
-            # 3. Busca dos Top-K chunks por query
-            K = 6 # Total máximo de chunks: 4 queries * 6 = 24 chunks (~36.000 chars)
+            K = 6 
             indices_selecionados = set()
-            
             for q_emb in embeddings_queries:
-                similaridades = []
-                for idx, c_emb in enumerate(embeddings_chunks):
-                    sim = _get_cosine_similarity(q_emb, c_emb)
-                    similaridades.append((idx, sim))
-                similaridades.sort(key=lambda x: x[1], reverse=True)
+                similaridades = sorted([(idx, _get_cosine_similarity(q_emb, c_emb)) for idx, c_emb in enumerate(embeddings_chunks)], key=lambda x: x[1], reverse=True)
                 for idx, sim in similaridades[:K]:
                     indices_selecionados.add(idx)
                     
-            # 4. Reconstrução do texto ordenado cronologicamente
             indices_ordenados = sorted(list(indices_selecionados))
-            transcricao_reduzida = "\n\n[...] (trecho pulado pelo RAG) [...]\n\n".join([chunks[i] for i in indices_ordenados])
-            
-            logger.info(f"RAG concluído. Tamanho reduzido de {len(transcricao)} para {len(transcricao_reduzida)} caracteres.")
-            transcricao = transcricao_reduzida
+            transcricao = "\n\n[...] (trecho pulado pelo RAG) [...]\n\n".join([chunks[i] for i in indices_ordenados])
+            logger.info(f"RAG concluído. Tamanho reduzido para {len(transcricao)} caracteres.")
 
         prompt_cfg = get_prompt("rpg.cronica")
         prompt = prompt_cfg["template"].format(transcricao=transcricao)
 
-        def _call_generate():
-            return self.client.models.generate_content(
-                model=self.MODELO_CRONICA,
-                contents=prompt
-            )
+        modelos = [self.MODELO_CRONICA] + self.MODELOS_BACKUP
+        cronica = None
+        ultima_excecao = None
 
-        resposta = await self._executar_com_retry(_call_generate)
-        cronica = resposta.text
+        for modelo_atual in modelos:
+            try:
+                logger.info(f"Tentando gerar crônica com {modelo_atual}...")
+                def _call_generate():
+                    return self.client.models.generate_content(
+                        model=modelo_atual,
+                        contents=prompt
+                    )
+                resposta = await self._executar_com_retry(_call_generate)
+                cronica = resposta.text
+                token_manager.registrar_uso(modelo_atual, len(prompt), len(cronica))
+                break
+            except Exception as e:
+                ultima_excecao = e
+                if "QUOTA_EXHAUSTED" in str(e):
+                    continue
+                raise e
 
-        # Registra uso estimado de tokens
-        token_manager.registrar_uso(self.MODELO_CRONICA, len(prompt), len(cronica))
-
-        return cronica
+        return cronica or "Erro ao gerar crônica."
 
     async def chat(self, mensagem: str, historico: list[dict] | None = None) -> str:
         """
-        Envia uma mensagem livre ao Gemini com histórico multi-turno e suporte a ferramentas.
+        Envia uma mensagem livre ao Gemini com suporte a ferramentas e fallback multi-modelo.
         """
         historico = historico or []
 
-        # Configura as ferramentas (tools)
         def exec_terminal(command: str) -> str:
-            """
-            Executa um comando no terminal Linux do servidor.
-            """
             return terminal_service.execute(command)
 
         tools = [exec_terminal]
 
-        # Constrói o histórico no formato esperado pelo SDK (ChatSession)
         contents = []
         for turno in historico:
             role = "user" if turno["role"] == "user" else "model"
@@ -265,48 +274,54 @@ class GeminiService:
                 "parts": [{"text": turno["content"]}]
             })
         
-        # Adiciona a mensagem atual
         contents.append({
             "role": "user",
             "parts": [{"text": mensagem}]
         })
 
-        # Configuração da sessão de chat com function calling automático
-        config = types.GenerateContentConfig(
-            system_instruction=self.SYSTEM_PROMPT,
-            tools=tools,
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
-        )
+        modelos_tentativa = [self.MODELO_CHAT] + self.MODELOS_BACKUP
+        ultima_excecao = None
 
-        try:
-            # Usando generate_content diretamente com o histórico completo para simplificar
-            # e garantir que o system_instruction seja respeitado em cada chamada.
-            def _call():
-                return self.client.models.generate_content(
-                    model=self.MODELO_CHAT,
-                    contents=contents,
-                    config=config
-                )
+        for modelo_atual in modelos_tentativa:
+            try:
+                logger.info(f"💬 Chat com modelo: {modelo_atual}")
+                
+                if "gemma" in modelo_atual:
+                    config = types.GenerateContentConfig(
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                    )
+                else:
+                    config = types.GenerateContentConfig(
+                        system_instruction=self.SYSTEM_PROMPT,
+                        tools=tools,
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
+                    )
 
-            resposta = await self._executar_com_retry(_call)
-            
-            if not resposta or not resposta.text:
-                # Caso o modelo tenha apenas retornado chamadas de função (o que o automatic_function_calling deve resolver)
-                # ou tenha dado algum erro silencioso.
-                return "Desculpe, não consegui processar sua mensagem."
+                def _call():
+                    return self.client.models.generate_content(
+                        model=modelo_atual,
+                        contents=contents,
+                        config=config
+                    )
 
-            texto = resposta.text.strip()
-            
-            # Registro de uso aproximado
-            input_chars = 0
-            for c in contents:
-                for p in c.get("parts", []):
-                    input_chars += len(p.get("text", ""))
-            token_manager.registrar_uso(self.MODELO_CHAT, input_chars, len(texto))
+                resposta = await self._executar_com_retry(_call)
+                if not resposta or not resposta.text:
+                    continue
 
-            return texto
+                texto = resposta.text.strip()
+                input_chars = sum(len(p.get("text", "")) for c in contents for p in c.get("parts", []))
+                token_manager.registrar_uso(modelo_atual, input_chars, len(texto))
 
-        except Exception as e:
-            logger.error(f"Erro no chat Gemini: {str(e)}")
-            return f"❌ Erro ao processar mensagem: {str(e)}"
+                return texto
 
+            except Exception as e:
+                ultima_excecao = e
+                msg_erro = str(e).lower()
+                if any(err in msg_erro for err in ["429", "quota_exhausted", "503", "limit"]):
+                    logger.warning(f"⚠️ Modelo {modelo_atual} sem cota. Tentando próximo...")
+                    continue
+                else:
+                    logger.error(f"Erro no modelo {modelo_atual}: {str(e)}")
+                    break
+
+        return f"❌ Todos os modelos falharam. Último erro: {str(ultima_excecao)}"

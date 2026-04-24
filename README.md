@@ -19,7 +19,32 @@ Bot de IA pessoal que roda no seu próprio servidor 24/7. Funciona como um assis
 | `/memoria_limpar` | Apaga o histórico |
 | `/rpg_transcrever` | Transcreve o áudio de RPG mais recente do Drive |
 | `/rpg_resumo` | Gera a Crônica Épica em PDF a partir da transcrição |
-| `Texto Livre` | Conversa com o agente (com **Poderes de Terminal** e acesso a ferramentas) |
+| `Texto Livre` | Conversa com o agente (com **Poderes de Terminal**, ferramentas e **Multi-model Fallback**) |
+
+---
+
+## Resiliência e Inteligência
+
+O Henricovisky foi projetado para ser imparável. Se o modelo principal falhar ou atingir o limite de cota, ele utiliza uma estratégia de **Failover Automático**:
+
+1.  **Modelo Primário:** `gemini-3-flash-preview` (Velocidade e raciocínio avançado)
+2.  **Fallback 1:** `gemini-3.1-flash-lite` (Eficiência e novos recursos)
+3.  **Fallback 2:** `gemma-4-26b` (Poderoso modelo open-source via API)
+4.  **Fallback 3:** `gemma-3-27b` / `gemma-3-4b` (Resiliência total)
+
+> **Nota:** O agente detecta erros `429 (Resource Exhausted)` e troca de modelo em tempo real sem interromper a experiência do usuário.
+
+---
+
+## Funcionalidades Futuras (Sugestões de Especialista)
+
+Como arquiteto do sistema, estas são as próximas evoluções recomendadas para transformar este bot em uma central de comando definitiva:
+
+- [ ] **Visão Computacional:** Capacidade de analisar prints de tela do servidor ou logs em imagem para diagnóstico rápido.
+- [ ] **Web Search Integrado:** Permitir que o agente pesquise documentações técnicas atualizadas no Google Search antes de sugerir comandos de terminal.
+- [ ] **Monitoramento Ativo (Watcher):** Um processo de fundo que avisa no Telegram se o uso de CPU passar de 90% ou se um serviço (ex: Docker) cair.
+- [ ] **Agendamento de Tarefas:** "Henricovisky, faça um backup do banco de dados todo domingo às 3 da manhã".
+- [ ] **Interface Web de Monitoramento:** Um mini-dashboard (usando Next.js ou Streamlit) para visualizar o uso de tokens e status do servidor graficamente.
 
 ---
 
