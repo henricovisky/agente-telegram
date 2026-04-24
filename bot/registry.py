@@ -2,6 +2,25 @@ from telegram.ext import CommandHandler, MessageHandler, filters
 
 from bot.middleware import autorizados_apenas
 from bot.modules import core, rpg, admin, chat
+from telegram import BotCommand
+
+# Lista de comandos para o menu (BotCommand)
+COMANDOS_MENU = [
+    BotCommand("start", "Boas-vindas e lista de módulos"),
+    BotCommand("ajuda", "Todos os comandos disponíveis"),
+    BotCommand("status", "Tokens Gemini usados hoje"),
+    BotCommand("status_server", "Métricas do servidor (CPU, RAM, Rede)"),
+    BotCommand("memoria", "Ver histórico do chat"),
+    BotCommand("memoria_limpar", "Apagar histórico e iniciar nova conversa"),
+    BotCommand("rpg_transcrever", "Transcrever áudio de RPG do Drive"),
+    BotCommand("rpg_resumo", "Gerar Crônica Épica em PDF"),
+    BotCommand("update", "Atualizar bot via GitHub"),
+]
+
+
+async def configurar_menu(app):
+    """Define a lista de comandos que aparece no menu do Telegram."""
+    await app.bot.set_my_commands(COMANDOS_MENU)
 
 
 def registrar(app):
