@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 
 from agent.context import context_manager
 from agent.token_manager import token_manager
+from services.conversation_service import conversation_service
 
 # Registra o momento em que o bot foi iniciado
 _BOT_START = time.time()
@@ -36,7 +37,9 @@ def _fmt_uptime(seconds: float) -> str:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🧠 *Oráculo de Mesa* — Agente IA Pessoal\n\n"
+        "🧠 *Henricovisky* — Agente IA Pessoal\n\n"
+        "Envie qualquer mensagem de texto para conversar com o agente.\n"
+        "Ou use um dos comandos abaixo:\n\n"
         "*Core:*\n"
         "/ajuda — lista de comandos\n"
         "/status — uso de tokens hoje\n"
@@ -54,13 +57,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📖 *Comandos disponíveis*\n\n"
+        "*Qualquer texto livre* — conversa com o agente (Gemini, histórico persistido)\n\n"
         "*/start* — boas-vindas\n"
         "*/ajuda* — esta mensagem\n"
-        "*/status* — tokens usados hoje + estado do contexto\n"
+        "*/status* — tokens usados hoje + mensagens na conversa\n"
         "*/status\\_server* — métricas de CPU, RAM, Disco e rede do servidor\n"
         "*/update* — git pull + pip install + reinício automático\n"
-        "*/memoria* — mostra histórico do chat atual\n"
-        "*/memoria\\_limpar* — apaga histórico do chat\n\n"
+        "*/memoria* — mostra histórico persistido do chat\n"
+        "*/memoria\\_limpar* — apaga histórico e inicia nova conversa\n\n"
         "*/rpg\\_transcrever* — baixa o áudio mais recente do Drive e gera `.txt`\n"
         "*/rpg\\_resumo* — lê o `.txt` mais recente e gera PDF da Crônica Épica",
         parse_mode="Markdown",
@@ -70,11 +74,11 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     relatorio = token_manager.relatorio_hoje()
-    ctx_info = context_manager.info(chat_id)
+    n_msgs = conversation_service.count_messages(chat_id)
     await update.message.reply_text(
         f"📊 *Status do Agente*\n\n"
         f"*Tokens hoje:*\n{relatorio}\n\n"
-        f"*Contexto:* {ctx_info}",
+        f"*Mensagens na conversa atual:* {n_msgs}",
         parse_mode="Markdown",
     )
 
@@ -128,16 +132,16 @@ async def status_server(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def memoria(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    ctx_str = context_manager.get_context_string(chat_id)
-    if not ctx_str:
+    hist = conversation_service.get_history_string(chat_id)
+    if not hist:
         await update.message.reply_text("Sem histórico guardado.")
         return
     await update.message.reply_text(
-        f"🧠 *Contexto atual:*\n\n{ctx_str[:3000]}",
+        f"🧠 *Contexto atual:*\n\n{hist[:3800]}",
         parse_mode="Markdown",
     )
 
 
 async def memoria_limpar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context_manager.clear(update.effective_chat.id)
-    await update.message.reply_text("✅ Histórico apagado.")
+    conversation_service.reset_conversation(update.effective_chat.id)
+    await update.message.reply_text("✅ Histórico apagado. Nova conversa iniciada.")
