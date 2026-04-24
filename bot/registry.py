@@ -1,7 +1,7 @@
 from telegram.ext import CommandHandler, MessageHandler, filters
 
 from bot.middleware import autorizados_apenas
-from bot.modules import core, rpg, admin, chat
+from bot.modules import core, rpg, admin, chat, monitoring
 from telegram import BotCommand
 
 # Lista de comandos para o menu (BotCommand)
@@ -14,6 +14,7 @@ COMANDOS_MENU = [
     BotCommand("memoria_limpar", "Apagar histórico e iniciar nova conversa"),
     BotCommand("rpg_transcrever", "Transcrever áudio de RPG do Drive"),
     BotCommand("rpg_resumo", "Gerar Crônica Épica em PDF"),
+    BotCommand("logs", "Ver últimos logs do sistema"),
     BotCommand("update", "Atualizar bot via GitHub"),
 ]
 
@@ -38,6 +39,7 @@ def registrar(app):
     # --- Módulo RPG ---
     app.add_handler(CommandHandler("rpg_transcrever", autorizados_apenas(rpg.rpg_transcrever)))
     app.add_handler(CommandHandler("rpg_resumo",      autorizados_apenas(rpg.rpg_resumo)))
+    app.add_handler(CommandHandler("logs",            autorizados_apenas(monitoring.logs)))
 
     # --- Chat livre (deve ser o ÚLTIMO handler para não interceptar comandos) ---
     app.add_handler(
@@ -48,5 +50,10 @@ def registrar(app):
     )
 
     # --- Novos módulos: adicione aqui ---
+    # --- Jobs em Segundo Plano ---
+    if app.job_queue:
+        # Executa a cada 10 minutos (600 segundos)
+        app.job_queue.run_repeating(monitoring.monitoramento_job, interval=600, first=10)
+
     # from bot.modules import reuniao
     # app.add_handler(CommandHandler("reuniao_resumo", autorizados_apenas(reuniao.resumo)))

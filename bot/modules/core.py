@@ -46,7 +46,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/status\\_server — métricas do servidor\n"
         "/update — atualiza o bot via GitHub\n"
         "/memoria — histórico do chat\n"
-        "/memoria\\_limpar — apagar histórico\n\n"
+        "/memoria\\_limpar — apagar histórico\n"
+        "/logs — ver últimos logs do servidor\n\n"
         "*Módulo RPG:*\n"
         "/rpg\\_transcrever — transcreve o áudio mais recente do Drive\n"
         "/rpg\\_resumo — gera Crônica Épica em PDF a partir da transcrição",
@@ -64,7 +65,8 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/status\\_server — métricas de CPU, RAM, Disco e rede do servidor\n"
         "/update — git pull + pip install + reinício automático\n"
         "/memoria — mostra histórico persistido do chat\n"
-        "/memoria\\_limpar — apaga histórico e inicia nova conversa\n\n"
+        "/memoria\\_limpar — apaga histórico e inicia nova conversa\n"
+        "/logs [serviço] — mostra as últimas 20 linhas de logs do systemd\n\n"
         "/rpg\\_transcrever — baixa o áudio mais recente do Drive e gera `.txt`\n"
         "/rpg\\_resumo — lê o `.txt` mais recente e gera PDF da Crônica Épica",
         parse_mode="Markdown",

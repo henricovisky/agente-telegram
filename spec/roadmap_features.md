@@ -41,11 +41,9 @@
 
 | Ideia | Descrição | Complexidade |
 |---|---|---|
-| **Alertas proativos de servidor** | Job periódico verifica se CPU > 90% ou disco > 85% e envia notificação automática no Telegram. | Baixa |
-| **Monitor de serviços** | Verifica se processos críticos (nginx, postgres, o próprio bot) estão rodando e alerta se cair. | Baixa |
-| **Tail de logs em tempo real** | `/logs [serviço]` — exibe as últimas 20 linhas de um log do systemd. | Baixa |
-| **Dashboard de ETL** | Consulta a tabela `etl_job_runs` do DW_3e e envia resumo de sucesso/falha dos jobs das últimas 24h. | Média |
-| **Alerta de erros no ETL** | Monitor que detecta jobs com `status = failed` e dispara notificação automática com detalhes. | Média |
+| **Alertas proativos de servidor** | ✅ Concluído: Job verifica CPU, RAM e Disco e alerta no Telegram. | Baixa |
+| **Monitor de serviços** | ✅ Concluído: Verifica status do serviço systemd `henricovisky`. | Baixa |
+| **Tail de logs em tempo real** | ✅ Concluído: `/logs [serviço]` exibe últimas 20 linhas via journalctl. | Baixa |
 
 ---
 
