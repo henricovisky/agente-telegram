@@ -55,7 +55,6 @@
 | **Backup automático via chat** | `/backup db` — dispara o backup do banco de dados e envia o arquivo compactado ou um link no Drive. | Média |
 | **Gerenciador de processos** | `/ps` lista processos pesados; `/kill [pid]` termina processo (com confirmação de segurança). | Média |
 | **Deploy de projetos** | `/deploy [projeto]` — faz git pull + restart de qualquer outro serviço cadastrado, não só o bot. | Alta |
-| **Tunnel SSH temporário** | Abre um túnel ngrok/cloudflare temporário e envia a URL, útil para acessar serviços locais externamente. | Alta |
 
 ---
 
@@ -63,9 +62,6 @@
 
 | Ideia | Descrição | Complexidade |
 |---|---|---|
-| **Integração com Zeev** | Consultar status de processos, instâncias abertas, ou disparar workflows via API do Zeev. | Alta |
-| **Integração com Mega ERP** | Consultar lançamentos, saldos ou relatórios financeiros via API do Mega. | Alta |
-| **Consulta ao DW via linguagem natural** | "Quais foram as vendas do mês passado?" → Gemini gera o SQL → executa no DW → devolve o resultado formatado. | Alta |
 | **Notificações de Pull Request** | Webhook do GitHub → bot avisa quando um PR é aberto/mergeado em repositórios de interesse. | Média |
 | **Integração com Notion/Obsidian** | `/nota_notion [texto]` cria uma página no Notion; ou sincroniza notas com vault do Obsidian via Drive. | Alta |
 

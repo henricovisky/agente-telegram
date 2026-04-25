@@ -39,9 +39,22 @@ class ConversationService:
                     user_id  TEXT NOT NULL,
                     provider TEXT NOT NULL DEFAULT 'gemini',
                     persona  TEXT NOT NULL DEFAULT 'henricovisky',
+                    model    TEXT,
                     created_at TEXT NOT NULL
                 )
             """)
+            try:
+                conn.execute("ALTER TABLE conversations ADD COLUMN model TEXT")
+            except sqlite3.OperationalError:
+                pass # Coluna já existe
+            try:
+                conn.execute("ALTER TABLE conversations ADD COLUMN persona TEXT NOT NULL DEFAULT 'henricovisky'")
+            except sqlite3.OperationalError:
+                pass # Coluna já existe
+            try:
+                conn.execute("ALTER TABLE conversations ADD COLUMN provider TEXT NOT NULL DEFAULT 'gemini'")
+            except sqlite3.OperationalError:
+                pass # Coluna já existe
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -119,6 +132,25 @@ class ConversationService:
             conn.execute(
                 "UPDATE conversations SET persona = ? WHERE id = ?",
                 (persona_key, conv_id),
+            )
+
+    def get_model(self, user_id: int) -> Optional[str]:
+        """Retorna o modelo preferido da conversa ativa."""
+        uid = str(user_id)
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT model FROM conversations WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                (uid,),
+            ).fetchone()
+            return row["model"] if row else None
+
+    def set_model(self, user_id: int, model_name: str):
+        """Atualiza o modelo da conversa ativa."""
+        conv_id = self.get_or_create_conversation(user_id)
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE conversations SET model = ? WHERE id = ?",
+                (model_name, conv_id),
             )
 
     # ------------------------------------------------------------------

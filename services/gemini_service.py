@@ -38,6 +38,11 @@ class GeminiService:
     # Intervalo de espera base (em segundos)
     INTERVALO_ESPERA_SEGUNDOS = 30
     MAX_RETRIES = 5
+    
+    @classmethod
+    def get_available_models(cls) -> list[str]:
+        """Retorna a lista de todos os modelos disponíveis (principal + backups)."""
+        return [cls.MODELO_CHAT] + cls.MODELOS_BACKUP
 
     def __init__(self, api_key: str = GEMINI_API_KEY):
         """
@@ -174,6 +179,7 @@ class GeminiService:
     async def chat(self, mensagem: str, user_id: int, historico: list[dict] | None = None, on_thought: callable = None) -> str:
         """Chat com histórico, compressão automática e RAG pessoal."""
         historico = historico or []
+        resumo_historico = None
         
         # 1. Compressão automática de histórico
         if len(historico) >= 16:
@@ -185,8 +191,9 @@ class GeminiService:
             try:
                 def _call_comp(): return self.client.models.generate_content(model='gemini-2.0-flash-lite', contents=prompt_comp)
                 res_comp = await self._executar_com_retry(_call_comp)
-                resumo = res_comp.text.strip()
-                historico = [{"role": "system", "content": f"Resumo da conversa anterior: {resumo}"}] + historico[-4:]
+                resumo_historico = res_comp.text.strip()
+                # Mantém apenas os últimos 4 turnos reais
+                historico = historico[-4:]
             except Exception as e:
                 logger.error(f"Falha na compressão: {e}")
 
@@ -208,24 +215,34 @@ class GeminiService:
             "lembrar_fato": lembrar_fato_tool
         }
         
-        # Lista de definições para o Gemini (apenas funções síncronas para definição ou adaptadas)
-        # O SDK prefere funções reais para extrair schema, mas como vamos rodar manual, 
-        # podemos passar as funções e desabilitar o automatic calling.
-        def exec_terminal(command: str) -> str: ...
-        def lembrar_fato(fato: str) -> str: ...
+        # Definições com docstrings para o Gemini (Schema extraction)
+        def exec_terminal(command: str) -> str:
+            """Executa um comando bash no servidor e retorna a saída."""
+            ...
+        def lembrar_fato(fato: str) -> str:
+            """Memoriza um fato importante sobre o usuário para consultas futuras."""
+            ...
         
         tools = [exec_terminal, lembrar_fato]
 
-        # 4. Formata conteúdos (Histórico + Mensagem Atual)
-        contents = []
+        # 4. Formata conteúdos (Histórico)
+        # Gemini exige que a conversa comece com 'user' e alterne roles.
+        contents_base = []
         for turno in historico:
             role = "user" if turno["role"] == "user" else "model"
-            contents.append(types.Content(role=role, parts=[types.Part(text=turno["content"])]))
+            contents_base.append(types.Content(role=role, parts=[types.Part(text=turno["content"])]))
         
-        contents.append(types.Content(role="user", parts=[types.Part(text=mensagem)]))
+        # Garante que começa com user se o histórico estiver "desalinhado" (segurança)
+        if contents_base and contents_base[0].role == "model":
+            contents_base = contents_base[1:]
 
         # 5. Tentativa de resposta com Fallback e Loop ReAct
-        modelos_tentativa = [self.MODELO_CHAT] + self.MODELOS_BACKUP
+        preferencia = conversation_service.get_model(user_id)
+        if preferencia:
+            modelos_tentativa = [preferencia] + [m for m in [self.MODELO_CHAT] + self.MODELOS_BACKUP if m != preferencia]
+        else:
+            modelos_tentativa = [self.MODELO_CHAT] + self.MODELOS_BACKUP
+            
         ultima_excecao = None
         
         for modelo_atual in modelos_tentativa:
@@ -234,14 +251,17 @@ class GeminiService:
                 persona = get_persona(persona_key)
                 
                 sys_inst = persona["prompt"]
+                if resumo_historico:
+                    sys_inst += f"\n\nResumo da conversa anterior:\n{resumo_historico}"
                 if memoria_contexto:
                     sys_inst += f"\n\nContexto da sua memória sobre este usuário:\n{memoria_contexto}"
 
+                # Reset do context para esta tentativa
+                contents = list(contents_base)
+                contents.append(types.Content(role="user", parts=[types.Part(text=mensagem)]))
+
                 # Se for Gemma, desabilita ferramentas por enquanto (suporte limitado)
-                if "gemma" in modelo_atual:
-                    tools_to_use = None
-                else:
-                    tools_to_use = tools
+                tools_to_use = None if "gemma" in modelo_atual else tools
 
                 # Loop ReAct manual
                 max_steps = 5
@@ -264,23 +284,17 @@ class GeminiService:
                     candidate = resposta.candidates[0]
                     parts = candidate.content.parts
                     
-                    # Adiciona a resposta do modelo ao histórico da chamada atual
+                    # Adiciona a resposta do modelo ao contexto da chamada
                     contents.append(candidate.content)
                     
                     # 1. Processa Texto e Thoughts
-                    thought_found = False
                     for part in parts:
                         if part.text:
                             texto = part.text
                             # Extrai <thought> se existir
                             match = re.search(r"<thought>(.*?)</thought>", texto, re.DOTALL)
                             if match and on_thought:
-                                thought_text = match.group(1).strip()
-                                await on_thought(thought_text)
-                                thought_found = True
-                            elif thought_found and on_thought:
-                                # Se já achamos um thought mas tem mais texto, pode ser parte do mesmo ou resposta final
-                                pass
+                                await on_thought(match.group(1).strip())
 
                     # 2. Processa Function Calls
                     function_calls = [p.function_call for p in parts if p.function_call]
@@ -288,7 +302,7 @@ class GeminiService:
                     if not function_calls:
                         # Resposta final (texto)
                         texto_final = "".join([p.text for p in parts if p.text])
-                        token_manager.registrar_uso(modelo_atual, 0, len(texto_final)) # Input já contado no loop
+                        token_manager.registrar_uso(modelo_atual, 0, len(texto_final))
                         return texto_final
 
                     # Executa ferramentas
@@ -316,16 +330,12 @@ class GeminiService:
                     # Adiciona resultados das ferramentas ao contexto
                     contents.append(types.Content(role="user", parts=tool_parts))
                 
-                # Se saiu do loop por max_steps
-                return "A tarefa foi muito complexa e atingiu o limite de passos."
+                return "A tarefa atingiu o limite de passos ReAct."
 
             except Exception as e:
                 ultima_excecao = e
-                if any(err in str(e).lower() for err in ["429", "quota", "503", "limit"]):
-                    logger.warning(f"⚠️ {modelo_atual} sem cota. Próximo...")
-                    contents = contents[:len(historico)+1] # Reseta contents para o próximo modelo
-                    continue
-                logger.error(f"Erro em {modelo_atual}: {e}", exc_info=True)
-                break
+                logger.warning(f"⚠️ Erro no modelo {modelo_atual}: {e}")
+                # Continua para o próximo modelo se houver falha
+                continue
 
         return f"❌ Todos os modelos falharam. Último erro: {str(ultima_excecao)}"

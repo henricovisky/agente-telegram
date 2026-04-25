@@ -1,8 +1,9 @@
 from telegram.ext import CommandHandler, MessageHandler, filters
 
 from bot.middleware import autorizados_apenas
-from bot.modules import core, rpg, admin, chat, monitoring, persona
-from telegram import BotCommand, BotCommandScopeAllPrivateChats
+from bot.modules import core, rpg, admin, chat, monitoring, persona, model
+from telegram import BotCommand, BotCommandScopeAllPrivateChats, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import CallbackQueryHandler
 
 # Lista de comandos para o menu (BotCommand)
 COMANDOS_MENU = [
@@ -10,6 +11,7 @@ COMANDOS_MENU = [
     BotCommand("ajuda", "Lista completa de comandos"),
     BotCommand("status", "Tokens usados hoje"),
     BotCommand("status_server", "Status do hardware"),
+    BotCommand("modelo", "Selecionar modelo IA"),
     BotCommand("persona", "Trocar personalidade"),
     BotCommand("memoria", "Ver contexto do chat"),
     BotCommand("memoria_limpar", "Limpar histórico"),
@@ -51,6 +53,10 @@ def registrar(app):
     app.add_handler(CommandHandler("rpg_resumo",      autorizados_apenas(rpg.rpg_resumo)))
     app.add_handler(CommandHandler("logs",            autorizados_apenas(monitoring.logs)))
     app.add_handler(CommandHandler("persona",         autorizados_apenas(persona.persona_cmd)))
+    app.add_handler(CommandHandler("modelo",          autorizados_apenas(model.modelo_cmd)))
+    
+    # Callbacks
+    app.add_handler(CallbackQueryHandler(autorizados_apenas(model.set_model_callback), pattern="^set_model:"))
     
     # Atalhos de personas
     from agent.persona_registry import PERSONAS
