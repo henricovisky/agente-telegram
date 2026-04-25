@@ -1,7 +1,7 @@
 from telegram.ext import CommandHandler, MessageHandler, filters
 
 from bot.middleware import autorizados_apenas
-from bot.modules import core, rpg, admin, chat, monitoring, persona, model
+from bot.modules import core, rpg, admin, chat, monitoring, persona, model, productivity
 from telegram import BotCommand, BotCommandScopeAllPrivateChats, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler
 
@@ -19,6 +19,10 @@ COMANDOS_MENU = [
     BotCommand("rpg_resumo", "Gerar Crônica PDF"),
     BotCommand("logs", "Ver logs do servidor"),
     BotCommand("update", "Atualizar via GitHub"),
+    BotCommand("nota", "Salvar nota rápida"),
+    BotCommand("notas", "Ver minhas notas"),
+    BotCommand("task", "Gerenciar tarefas"),
+    BotCommand("briefing", "Resumo do dia"),
     # Atalhos rápidos de personas
     BotCommand("henricovisky", "Persona: Especialista Linux/Python"),
     BotCommand("mestre", "Persona: Mestre de RPG"),
@@ -58,6 +62,13 @@ def registrar(app):
     # Callbacks
     app.add_handler(CallbackQueryHandler(autorizados_apenas(model.set_model_callback), pattern="^set_model:"))
     
+    # --- Produtividade ---
+    app.add_handler(CommandHandler("nota",        autorizados_apenas(productivity.nota)))
+    app.add_handler(CommandHandler("notas",       autorizados_apenas(productivity.notas)))
+    app.add_handler(CommandHandler("nota_apagar", autorizados_apenas(productivity.nota_apagar)))
+    app.add_handler(CommandHandler("task",        autorizados_apenas(productivity.task)))
+    app.add_handler(CommandHandler("briefing",    autorizados_apenas(productivity.briefing)))
+
     # Atalhos de personas
     from agent.persona_registry import PERSONAS
     for p_key in PERSONAS.keys():

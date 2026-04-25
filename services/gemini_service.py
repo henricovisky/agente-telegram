@@ -288,22 +288,27 @@ class GeminiService:
                     contents.append(candidate.content)
                     
                     # 1. Processa Texto e Thoughts
+                    texto_acumulado = ""
                     for part in parts:
                         if part.text:
-                            texto = part.text
+                            texto_parte = part.text
                             # Extrai <thought> se existir
-                            match = re.search(r"<thought>(.*?)</thought>", texto, re.DOTALL)
-                            if match and on_thought:
-                                await on_thought(match.group(1).strip())
+                            match = re.search(r"<thought>(.*?)</thought>", texto_parte, re.DOTALL)
+                            if match:
+                                if on_thought:
+                                    await on_thought(match.group(1).strip())
+                                # Remove o thought do texto que será enviado ao usuário
+                                texto_parte = re.sub(r"<thought>.*?</thought>", "", texto_parte, flags=re.DOTALL).strip()
+                            
+                            texto_acumulado += texto_parte
 
                     # 2. Processa Function Calls
                     function_calls = [p.function_call for p in parts if p.function_call]
                     
                     if not function_calls:
-                        # Resposta final (texto)
-                        texto_final = "".join([p.text for p in parts if p.text])
-                        token_manager.registrar_uso(modelo_atual, 0, len(texto_final))
-                        return texto_final
+                        # Resposta final (texto limpo)
+                        token_manager.registrar_uso(modelo_atual, 0, len(texto_acumulado))
+                        return texto_acumulado
 
                     # Executa ferramentas
                     tool_parts = []

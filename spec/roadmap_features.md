@@ -17,11 +17,11 @@
 
 | Ideia | Descrição | Complexidade |
 |---|---|---|
-| **Lembretes e alarmes** | `/lembrete 20min reunião com o João` — usa APScheduler para enfileirar notificações agendadas. | Média |
-| **Resumo diário automático** | Todo dia às 7h, envia um briefing gerado pelo Gemini com: clima, agenda do Google Calendar, lembretes pendentes. | Alta |
-| **Notas rápidas** | `/nota [texto]` salva em SQLite; `/notas` lista todas; `/nota_apagar [id]` remove. O agente pode buscar nas notas via texto livre. | Baixa |
-| **Leitor de e-mails** | Integra Gmail API: `/emails` mostra os últimos 5 não lidos com resumo do Gemini. | Alta |
-| **Rastreador de tarefas (To-Do)** | `/task add`, `/task list`, `/task done [id]` — simples, sem depência externa, tudo em SQLite local. | Baixa |
+| **Lembretes e alarmes** | `/lembrete` — usa APScheduler para enfileirar notificações. (Em desenvolvimento) | Média |
+| **Resumo diário automático** | ✅ Concluído: Comando `/briefing` gera um resumo visual formatado. | Alta |
+| **Notas rápidas** | ✅ Concluído: `/nota` e `/notas` persistidos em SQLite local. | Baixa |
+| **Leitor de e-mails** | Integra Gmail API. (Pendente) | Alta |
+| **Rastreador de tarefas (To-Do)** | ✅ Concluído: `/task` (add, list, done) com interface limpa. | Baixa |
 
 ---
 

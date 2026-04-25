@@ -77,10 +77,10 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         # Envia ao Telegram (split automático se > 4096 chars)
         if len(resposta) <= 4096:
-            await update.message.reply_text(resposta)
+            await update.message.reply_text(resposta, parse_mode='Markdown')
         else:
             for i in range(0, len(resposta), 4096):
-                await update.message.reply_text(resposta[i : i + 4096])
+                await update.message.reply_text(resposta[i : i + 4096], parse_mode='Markdown')
 
     except Exception as e:
         logger.error(f"Erro no handler de chat: {e}", exc_info=True)
