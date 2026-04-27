@@ -15,7 +15,10 @@ async def nota(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     chat_id = str(update.effective_chat.id)
-    note_id = productivity_service.add_note(chat_id, texto)
+    # Limpeza básica para evitar quebra de markdown no retorno
+    texto_limpo = texto.replace("*", "").replace("_", "").replace("`", "")
+    
+    note_id = productivity_service.add_note(chat_id, texto_limpo)
     await update.message.reply_text(Tpl.note_saved(note_id), parse_mode="Markdown")
 
 async def notas(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -61,8 +64,10 @@ async def task(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not content:
             await update.message.reply_text("❌ Qual a tarefa?")
             return
-        productivity_service.add_task(chat_id, content)
-        await update.message.reply_text(Tpl.task_added(content), parse_mode="Markdown")
+        # Limpeza
+        content_limpo = content.replace("*", "").replace("_", "").replace("`", "")
+        productivity_service.add_task(chat_id, content_limpo)
+        await update.message.reply_text(Tpl.task_added(content_limpo), parse_mode="Markdown")
         
     elif subcmd == "list":
         tasks = productivity_service.get_pending_tasks(chat_id)
@@ -83,16 +88,29 @@ async def task(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Informe o ID da tarefa.")
 
 async def briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gera um resumo visual de produtividade (Mockado por enquanto)."""
+    """Gera um resumo visual de produtividade."""
     chat_id = str(update.effective_chat.id)
     
-    # Simulação de dados (futuramente virão de APIs)
-    weather = Tpl.section_weather("Fortaleza", 28.5, "ensolarado")
-    calendar = Tpl.section_calendar(["10:00 - Daily Scrum", "14:30 - Review de Código"])
+    # Simulação de dados externos (clima e agenda)
+    weather = Tpl.section_weather("Sua Cidade", 25.0, "parcialmente nublado")
+    calendar = Tpl.section_calendar([]) # Futura integração
     
+    # Dados reais do banco
     tasks_data = productivity_service.get_pending_tasks(chat_id)
-    preview = [t['text'] for t in tasks_data[:3]]
-    tasks_sec = Tpl.section_tasks(len(tasks_data), preview)
+    tasks_preview = [t['text'] for t in tasks_data[:3]]
+    tasks_sec = Tpl.section_tasks(len(tasks_data), tasks_preview)
     
-    msg = Tpl.header_briefing() + weather + calendar + tasks_sec + "_Tenha um dia produtivo!_ 🚀"
+    notes_data = productivity_service.get_notes(chat_id)
+    notes_preview = [n['text'][:40] for n in notes_data[:3]]
+    notes_sec = Tpl.section_notes_briefing(notes_preview)
+    
+    msg = (
+        Tpl.header_briefing() + 
+        weather + 
+        calendar + 
+        tasks_sec + 
+        notes_sec + 
+        "_Tenha um dia produtivo!_ 🚀"
+    )
+    
     await update.message.reply_text(msg, parse_mode="Markdown")

@@ -8,36 +8,42 @@ from telegram.ext import CallbackQueryHandler
 # Lista de comandos para o menu (BotCommand)
 COMANDOS_MENU = [
     BotCommand("start", "Início e boas-vindas"),
-    BotCommand("ajuda", "Lista completa de comandos"),
-    BotCommand("status", "Tokens usados hoje"),
-    BotCommand("status_server", "Status do hardware"),
-    BotCommand("modelo", "Selecionar modelo IA"),
+    BotCommand("ajuda", "Guia completo de comandos"),
+    BotCommand("status", "Tokens e uso hoje"),
+    BotCommand("status_server", "Hardware e rede"),
+    BotCommand("modelo", "Trocar modelo de IA"),
     BotCommand("persona", "Trocar personalidade"),
-    BotCommand("memoria", "Ver contexto do chat"),
-    BotCommand("memoria_limpar", "Limpar histórico"),
-    BotCommand("rpg_transcrever", "Transcrever áudio Drive"),
-    BotCommand("rpg_resumo", "Gerar Crônica PDF"),
-    BotCommand("logs", "Ver logs do servidor"),
-    BotCommand("update", "Atualizar via GitHub"),
-    BotCommand("nota", "Salvar nota rápida"),
-    BotCommand("notas", "Ver minhas notas"),
+    BotCommand("memoria", "Contexto atual"),
+    BotCommand("memoria_limpar", "Resetar conversa"),
+    BotCommand("nota", "Salvar nota: /nota <texto>"),
+    BotCommand("notas", "Listar minhas notas"),
     BotCommand("task", "Gerenciar tarefas"),
     BotCommand("briefing", "Resumo do dia"),
+    BotCommand("server", "Gestão do servidor e rede"),
+    BotCommand("rpg_transcrever", "Transcrever áudio Drive"),
+    BotCommand("rpg_resumo", "Gerar PDF da sessão"),
+    BotCommand("logs", "Ver logs do servidor"),
+    BotCommand("update", "Atualizar via GitHub"),
     # Atalhos rápidos de personas
-    BotCommand("henricovisky", "Persona: Especialista Linux/Python"),
-    BotCommand("mestre", "Persona: Mestre de RPG"),
-    BotCommand("dev", "Persona: Senior Developer"),
-    BotCommand("financeiro", "Persona: Analista Financeiro"),
-    BotCommand("curto", "Persona: Modo Direto"),
+    BotCommand("henricovisky", "Persona: Especialista"),
+    BotCommand("mestre", "Persona: Mestre RPG"),
+    BotCommand("dev", "Persona: Senior Dev"),
+    BotCommand("financeiro", "Persona: Analista"),
+    BotCommand("curto", "Persona: Direto"),
 ]
 
 
 async def configurar_menu(app):
     """Define a lista de comandos que aparece no menu do Telegram (escopo privado)."""
-    await app.bot.set_my_commands(
-        COMANDOS_MENU,
-        scope=BotCommandScopeAllPrivateChats()
-    )
+    from config import logger
+    try:
+        await app.bot.set_my_commands(
+            COMANDOS_MENU,
+            scope=BotCommandScopeAllPrivateChats()
+        )
+        logger.info("✅ Menu de comandos atualizado com sucesso.")
+    except Exception as e:
+        logger.error(f"❌ Erro ao configurar menu: {e}")
 
 
 def registrar(app):
@@ -69,15 +75,21 @@ def registrar(app):
     app.add_handler(CommandHandler("task",        autorizados_apenas(productivity.task)))
     app.add_handler(CommandHandler("briefing",    autorizados_apenas(productivity.briefing)))
 
+    # --- Infraestrutura ---
+    from bot.modules import server
+    app.add_handler(CommandHandler("server",         autorizados_apenas(server.server_cmd)))
+    app.add_handler(CommandHandler("servidor",       autorizados_apenas(server.server_cmd)))
+    app.add_handler(CommandHandler("skill_servidor", autorizados_apenas(server.server_cmd)))
+
     # Atalhos de personas
     from agent.persona_registry import PERSONAS
     for p_key in PERSONAS.keys():
         app.add_handler(CommandHandler(p_key, autorizados_apenas(persona.trocar_persona)))
 
-    # --- Chat livre (deve ser o ÚLTIMO handler para não interceptar comandos) ---
+    # --- Chat livre (Texto, Voz, Áudio, Documentos) ---
     app.add_handler(
         MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
+            (filters.TEXT | filters.VOICE | filters.AUDIO | filters.Document.ALL) & ~filters.COMMAND,
             autorizados_apenas(chat.responder),
         )
     )

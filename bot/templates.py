@@ -41,6 +41,14 @@ class ProductivityTemplates:
         return f"{header}{lista}\n\n"
 
     @staticmethod
+    def section_notes_briefing(notes_preview: list[str]) -> str:
+        if not notes_preview:
+            return ""
+        header = "📌 *Notas Recentes:*\n"
+        lista = "\n".join([f"└ 📝 {n}" for n in notes_preview])
+        return f"{header}{lista}\n\n"
+
+    @staticmethod
     def reminder_scheduled(time_str: str, text: str) -> str:
         return (
             "🔔 *Lembrete Agendado!*\n"
@@ -63,8 +71,9 @@ class ProductivityTemplates:
         header = "📑 *Suas Notas Rápidas*\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
         lista = []
         for n in notes:
-            # Trunca o texto se for muito longo
-            txt = n['text'][:50] + "..." if len(n['text']) > 50 else n['text']
+            # Limpa caracteres que quebram o markdown e trunca
+            clean_text = n['text'].replace("*", "").replace("_", "").replace("`", "")
+            txt = clean_text[:50] + "..." if len(clean_text) > 50 else clean_text
             lista.append(f"`#{n['id']}` — {txt}")
             
         return header + "\n".join(lista) + "\n\n_Dica: Use `/nota_apagar ID` para remover._"
