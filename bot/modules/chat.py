@@ -11,76 +11,88 @@ Fluxo (PRD §6.2):
   6. Resposta é enviada ao chat.
 """
 import asyncio
+import re
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.constants import ChatAction
-
 from services.gemini_service import GeminiService
 from services.conversation_service import conversation_service
+from services.input_handler import InputHandler
+from services.output_handler import output_handler
 from config import logger
 
 _gemini = GeminiService()
+_input_handler = InputHandler(_gemini)
 
 
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
-    Handler principal de mensagens de texto livres.
-    Mantém histórico multi-turno persistido em SQLite.
+    Handler principal que agora suporta Texto, Áudio e Documentos (PDF/MD).
+    Implementa o fluxo de Agent Loop com entrada/saída multimídia.
     """
-    mensagem = update.message.text
-    if not mensagem:
+    chat_id = update.effective_chat.id
+    message = update.message
+    
+    # 1. Identifica e processa o tipo de Input
+    texto_input = ""
+    requires_audio_reply = False
+    
+    if message.text:
+        texto_input = message.text
+        # Verifica se o usuário pediu áudio explicitamente no texto
+        if re.search(r"(responda|fale|diga) (em|por) (áudio|voz)", texto_input.lower()):
+            requires_audio_reply = True
+            
+    elif message.voice or message.audio:
+        texto_input, requires_audio_reply = await _input_handler.process_voice_or_audio(update, context)
+        
+    elif message.document:
+        texto_input = await _input_handler.process_document(update, context)
+        # Documentos geralmente não pedem resposta em áudio a menos que o caption peça
+        caption = message.caption or ""
+        if re.search(r"(responda|fale|diga) (em|por) (áudio|voz)", caption.lower()):
+            requires_audio_reply = True
+            texto_input += f"\n\nInstrução adicional: {caption}"
+
+    if not texto_input:
         return
 
-    chat_id = update.effective_chat.id
-
-    # Sinaliza "digitando..." continuamente enquanto processa
-    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    # 2. Sinaliza processamento
+    action = ChatAction.RECORD_VOICE if requires_audio_reply else ChatAction.TYPING
+    await context.bot.send_chat_action(chat_id=chat_id, action=action)
 
     try:
-        # Recupera histórico persistido (últimas N mensagens)
+        # Recupera histórico persistido
         historico = conversation_service.get_history(chat_id)
 
-        # Persiste a mensagem do usuário antes de chamar o LLM
-        conversation_service.add_message(chat_id, "user", mensagem)
+        # Persiste a mensagem do usuário (ou transcrição)
+        conversation_service.add_message(chat_id, "user", texto_input)
 
-        async def _keep_typing():
+        async def _keep_acting():
             while True:
                 await asyncio.sleep(4)
                 try:
-                    await context.bot.send_chat_action(
-                        chat_id=chat_id, action=ChatAction.TYPING
-                    )
+                    await context.bot.send_chat_action(chat_id=chat_id, action=action)
                 except Exception:
                     break
 
         async def _on_thought(thought_text: str):
-            """Callback para exibir o raciocínio do agente em tempo real."""
-            logger.info(f"🧠 Raciocínio enviado para {chat_id}: {thought_text[:50]}...")
-            # Envia o raciocínio como uma mensagem separada, formatada em itálico
-            try:
-                await context.bot.send_message(
-                    chat_id=chat_id, 
-                    text=f"🧠 *Raciocínio:*\n_{thought_text}_",
-                    parse_mode='Markdown'
-                )
-            except Exception as e:
-                logger.error(f"Erro ao enviar thought: {e}")
+            """Exibe o raciocínio do agente em tempo real."""
+            # O usuário solicitou não ver o raciocínio.
+            # logger.debug(f"Thought: {thought_text}")
+            pass
 
-        typing_task = asyncio.create_task(_keep_typing())
+        acting_task = asyncio.create_task(_keep_acting())
         try:
-            resposta = await _gemini.chat(mensagem, chat_id, historico, on_thought=_on_thought)
+            resposta = await _gemini.chat(texto_input, chat_id, historico, on_thought=_on_thought)
         finally:
-            typing_task.cancel()
+            acting_task.cancel()
 
-        # Persiste a resposta do assistente
+        # 3. Persiste a resposta
         conversation_service.add_message(chat_id, "assistant", resposta)
 
-        # Envia ao Telegram (split automático se > 4096 chars)
-        if len(resposta) <= 4096:
-            await update.message.reply_text(resposta, parse_mode='Markdown')
-        else:
-            for i in range(0, len(resposta), 4096):
-                await update.message.reply_text(resposta[i : i + 4096], parse_mode='Markdown')
+        # 4. Envia resposta via OutputHandler (Chunking/TTS)
+        await output_handler.send_output(update, context, resposta, requires_audio=requires_audio_reply)
 
     except Exception as e:
         logger.error(f"Erro no handler de chat: {e}", exc_info=True)

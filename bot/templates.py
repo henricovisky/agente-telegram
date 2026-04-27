@@ -8,6 +8,12 @@ from datetime import datetime
 class ProductivityTemplates:
     
     @staticmethod
+    def _clean_markdown(text: str) -> str:
+        """Limpa caracteres que quebram o Markdown V1 do Telegram."""
+        if not text: return ""
+        return text.replace("*", "").replace("_", "").replace("`", "").replace("[", "(").replace("]", ")")
+
+    @staticmethod
     def header_briefing() -> str:
         data_str = datetime.now().strftime("%d/%m/%Y")
         return (
@@ -37,7 +43,8 @@ class ProductivityTemplates:
         if not list_preview:
             return header + "\n"
         
-        lista = "\n".join([f"└ 🔘 {t}" for t in list_preview])
+        # Limpa cada tarefa
+        lista = "\n".join([f"└ 🔘 {ProductivityTemplates._clean_markdown(t)}" for t in list_preview])
         return f"{header}{lista}\n\n"
 
     @staticmethod
@@ -45,16 +52,18 @@ class ProductivityTemplates:
         if not notes_preview:
             return ""
         header = "📌 *Notas Recentes:*\n"
-        lista = "\n".join([f"└ 📝 {n}" for n in notes_preview])
+        # Limpa cada nota
+        lista = "\n".join([f"└ 📝 {ProductivityTemplates._clean_markdown(n)}" for n in notes_preview])
         return f"{header}{lista}\n\n"
 
     @staticmethod
     def reminder_scheduled(time_str: str, text: str) -> str:
+        clean_text = ProductivityTemplates._clean_markdown(text)
         return (
             "🔔 *Lembrete Agendado!*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⏰ *Quando:* `{time_str}`\n"
-            f"📝 *O quê:* {text}\n"
+            f"📝 *O quê:* {clean_text}\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "_Eu te avisarei assim que chegar a hora._"
         )
@@ -71,8 +80,7 @@ class ProductivityTemplates:
         header = "📑 *Suas Notas Rápidas*\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
         lista = []
         for n in notes:
-            # Limpa caracteres que quebram o markdown e trunca
-            clean_text = n['text'].replace("*", "").replace("_", "").replace("`", "")
+            clean_text = ProductivityTemplates._clean_markdown(n['text'])
             txt = clean_text[:50] + "..." if len(clean_text) > 50 else clean_text
             lista.append(f"`#{n['id']}` — {txt}")
             
@@ -80,17 +88,21 @@ class ProductivityTemplates:
 
     @staticmethod
     def task_added(task: str) -> str:
-        return f"➕ *Tarefa adicionada:* {task}"
+        clean_task = ProductivityTemplates._clean_markdown(task)
+        return f"➕ *Tarefa adicionada:* {clean_task}"
 
     @staticmethod
     def email_list(emails: list[dict]) -> str:
+        # ... (mantendo lógica de e-mail se existir)
         if not emails:
             return "📧 *E-mails:* Sua caixa de entrada está limpa! ✨"
         
         header = "📧 *E-mails Recentes (Não Lidos)*\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
         lista = []
         for e in emails:
-            from_name = e['from'].split('<')[0].strip()
-            lista.append(f"👤 *{from_name}*\n└ ✉️ {e['subject']}\n   _Resumo: {e['summary']}_")
+            from_name = ProductivityTemplates._clean_markdown(e['from'].split('<')[0].strip())
+            subject = ProductivityTemplates._clean_markdown(e['subject'])
+            summary = ProductivityTemplates._clean_markdown(e['summary'])
+            lista.append(f"👤 *{from_name}*\n└ ✉️ {subject}\n   _Resumo: {summary}_")
             
         return header + "\n\n".join(lista)

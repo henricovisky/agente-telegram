@@ -38,46 +38,45 @@ def _fmt_uptime(seconds: float) -> str:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🧠 *Henricovisky* — Agente IA Pessoal\n\n"
-        "Envie qualquer mensagem de texto para conversar com o agente.\n"
-        "Ou use um dos comandos abaixo:\n\n"
-        "*Core & Admin:*\n"
-        "/ajuda — lista detalhada de comandos\n"
-        "/status — uso de tokens hoje\n"
-        "/status\\_server — métricas do servidor\n"
-        "/update — atualiza o bot via GitHub\n"
-        "/logs — ver últimos logs do servidor\n\n"
-        "*Memória & Personas:*\n"
-        "/persona — listar e trocar personalidade\n"
-        "/memoria — ver histórico do chat\n"
-        "/memoria\\_limpar — apagar histórico\n\n"
-        "*Módulo RPG:*\n"
-        "/rpg\\_transcrever — transcreve áudio do Drive\n"
-        "/rpg\\_resumo — gera Crônica Épica em PDF",
+        "Sou seu assistente inteligente operando com Gemini e memória persistente (RAG).\n\n"
+        "🎙️ *Multimídia:* Pode me enviar textos, áudios (transcrevo e respondo em voz) ou documentos (PDF/MD).\n\n"
+        "📖 Use /ajuda para ver o guia completo de comandos.",
         parse_mode="Markdown",
     )
 
 
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from agent.persona_registry import list_personas
-    await update.message.reply_text(
-        "📖 *Guia de Comandos*\n\n"
-        "*Qualquer texto* — conversa com o agente (Gemini + Memória RAG)\n\n"
-        "*Sistema & Admin:*\n"
-        "/status — tokens usados hoje + mensagens na conversa\n"
-        "/status\\_server — métricas de hardware do servidor\n"
-        "/update — faz pull do código e reinicia o bot\n"
-        "/logs [serviço] — ver logs do journalctl\n\n"
-        "*Memória & Contexto:*\n"
-        "/memoria — mostra o histórico persistido (contexto atual)\n"
-        "/memoria\\_limpar — limpa o histórico da conversa atual\n\n"
-        "*Personas (IA):*\n"
-        "/persona — lista as personalidades disponíveis\n"
-        f"{list_personas()}\n\n"
-        "*Módulo RPG:*\n"
-        "/rpg\\_transcrever — processa o áudio mais recente do Drive\n"
-        "/rpg\\_resumo — gera Crônica Épica em PDF a partir da última transcrição",
-        parse_mode="Markdown",
+    msg = (
+        "📖 *Guia de Comandos Henricovisky*\n\n"
+        "*Qualquer texto/voz* — Conversa com o agente (Gemini + RAG)\n"
+        "*PDF/MD* — Envie arquivos para análise\n\n"
+        "🛠 *Sistema & Admin:*\n"
+        "/status — Uso de tokens e mensagens\n"
+        "/status\\_server — Saúde do hardware/servidor\n"
+        "/modelo — Trocar modelo IA (Backup: Flash Lite, Gemma)\n"
+        "/update — Atualizar bot via GitHub\n"
+        "/logs — Ver logs recentes do serviço\n\n"
+        "🧠 *Memória & Personas:*\n"
+        "/persona — Menu de troca de personalidade\n"
+        "/memoria — Ver contexto atual do chat\n"
+        "/memoria\\_limpar — Resetar histórico local\n"
+        "/henricovisky, /mestre, /dev, /financeiro, /curto (Atalhos)\n\n"
+        "📝 *Produtividade:*\n"
+        "/nota <texto> — Salvar nota rápida\n"
+        "/notas — Listar suas notas salvas\n"
+        "/nota\\_apagar <id> — Remover uma nota\n"
+        "/task add <texto> — Adicionar tarefa\n"
+        "/task list — Ver tarefas pendentes\n"
+        "/task done <id> — Concluir tarefa\n"
+        "/briefing — Resumo inteligente do seu dia\n\n"
+        "🌐 *Infraestrutura:*\n"
+        "/server — Menu de gestão do servidor e Tailscale\n"
+        "/logs — Ver logs recentes do sistema\n\n"
+        "🎲 *Módulo RPG:*\n"
+        "/rpg\\_transcrever — Processar áudio do Drive\n"
+        "/rpg\\_resumo — Gerar PDF épico da sessão"
     )
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):

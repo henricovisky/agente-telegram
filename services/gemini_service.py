@@ -266,6 +266,8 @@ class GeminiService:
                 # Loop ReAct manual
                 max_steps = 5
                 current_step = 0
+                texto_final_acumulado = []
+
                 while current_step < max_steps:
                     current_step += 1
                     
@@ -288,7 +290,7 @@ class GeminiService:
                     contents.append(candidate.content)
                     
                     # 1. Processa Texto e Thoughts
-                    texto_acumulado = ""
+                    texto_deste_passo = ""
                     for part in parts:
                         if part.text:
                             texto_parte = part.text
@@ -300,15 +302,20 @@ class GeminiService:
                                 # Remove o thought do texto que será enviado ao usuário
                                 texto_parte = re.sub(r"<thought>.*?</thought>", "", texto_parte, flags=re.DOTALL).strip()
                             
-                            texto_acumulado += texto_parte
+                            if texto_parte:
+                                texto_deste_passo += texto_parte
+                    
+                    if texto_deste_passo:
+                        texto_final_acumulado.append(texto_deste_passo)
 
                     # 2. Processa Function Calls
                     function_calls = [p.function_call for p in parts if p.function_call]
                     
                     if not function_calls:
-                        # Resposta final (texto limpo)
-                        token_manager.registrar_uso(modelo_atual, 0, len(texto_acumulado))
-                        return texto_acumulado
+                        # Resposta final
+                        final_str = "\n\n".join(texto_final_acumulado).strip()
+                        token_manager.registrar_uso(modelo_atual, 0, len(final_str))
+                        return final_str
 
                     # Executa ferramentas
                     tool_parts = []

@@ -13,7 +13,10 @@ class ProductivityService:
         self._init_db()
 
     def _conn(self):
-        return sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        return conn
 
     def _init_db(self):
         with self._conn() as conn:
@@ -52,7 +55,7 @@ class ProductivityService:
                 "SELECT id, content FROM notes WHERE user_id = ? ORDER BY id DESC",
                 (user_id,)
             ).fetchall()
-            return [{"id": r[0], "text": r[1]} for r in rows]
+            return [{"id": r["id"], "text": r["content"]} for r in rows]
 
     def delete_note(self, user_id: str, note_id: int) -> bool:
         with self._conn() as conn:
@@ -77,7 +80,7 @@ class ProductivityService:
                 "SELECT id, content FROM tasks WHERE user_id = ? AND done = 0 ORDER BY id ASC",
                 (user_id,)
             ).fetchall()
-            return [{"id": r[0], "text": r[1]} for r in rows]
+            return [{"id": r["id"], "text": r["content"]} for r in rows]
 
     def complete_task(self, user_id: str, task_id: int) -> bool:
         with self._conn() as conn:
