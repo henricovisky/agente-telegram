@@ -305,12 +305,17 @@ class GeminiService:
                             if texto_parte:
                                 texto_deste_passo += texto_parte
                     
-                    if texto_deste_passo:
-                        texto_final_acumulado.append(texto_deste_passo)
-
                     # 2. Processa Function Calls
                     function_calls = [p.function_call for p in parts if p.function_call]
                     
+                    if texto_deste_passo:
+                        if function_calls:
+                            # Se há ferramentas, o texto deste passo é apenas informativo/parcial.
+                            # O usuário solicitou aguardar a análise final. Enviamos para o log/thought.
+                            logger.debug(f"Texto intermediário descartado (aguardando ferramenta): {texto_deste_passo}")
+                        else:
+                            texto_final_acumulado.append(texto_deste_passo)
+
                     if not function_calls:
                         # Resposta final
                         final_str = "\n\n".join(texto_final_acumulado).strip()
