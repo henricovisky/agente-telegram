@@ -57,6 +57,11 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not texto_input:
         return
 
+    # 1.1. Verifica se a mensagem contém menção ao @concurso
+    if "@concurso" in texto_input.lower():
+        from bot.modules import concurso
+        return await concurso.concurso_cmd(update, context)
+
     # 2. Sinaliza processamento
     action = ChatAction.RECORD_VOICE if requires_audio_reply else ChatAction.TYPING
     await context.bot.send_chat_action(chat_id=chat_id, action=action)

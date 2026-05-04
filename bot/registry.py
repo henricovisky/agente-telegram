@@ -1,7 +1,7 @@
 from telegram.ext import CommandHandler, MessageHandler, filters
 
 from bot.middleware import autorizados_apenas
-from bot.modules import core, rpg, admin, chat, monitoring, persona, model, productivity
+from bot.modules import core, rpg, admin, chat, monitoring, persona, model, productivity, concurso
 from telegram import BotCommand, BotCommandScopeAllPrivateChats, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler
 
@@ -9,6 +9,7 @@ from telegram.ext import CallbackQueryHandler
 COMANDOS_MENU = [
     BotCommand("start", "Início e boas-vindas"),
     BotCommand("ajuda", "Guia completo de comandos"),
+    BotCommand("concurso", "Busca concursos do PCI"),
     BotCommand("status", "Tokens e uso hoje"),
     BotCommand("status_server", "Hardware e rede"),
     BotCommand("modelo", "Trocar modelo de IA"),
@@ -74,6 +75,9 @@ def registrar(app):
     app.add_handler(CommandHandler("nota_apagar", autorizados_apenas(productivity.nota_apagar)))
     app.add_handler(CommandHandler("task",        autorizados_apenas(productivity.task)))
     app.add_handler(CommandHandler("briefing",    autorizados_apenas(productivity.briefing)))
+
+    # --- Concursos ---
+    app.add_handler(CommandHandler("concurso",    autorizados_apenas(concurso.concurso_cmd)))
 
     # --- Infraestrutura ---
     from bot.modules import server
