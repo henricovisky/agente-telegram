@@ -24,7 +24,7 @@ class TerminalService:
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=120,
                 # Define o diretório de trabalho como a raiz do projeto se possível
                 cwd=os.getcwd()
             )

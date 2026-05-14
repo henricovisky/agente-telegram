@@ -84,6 +84,8 @@ def registrar(app):
     app.add_handler(CommandHandler("server",         autorizados_apenas(server.server_cmd)))
     app.add_handler(CommandHandler("servidor",       autorizados_apenas(server.server_cmd)))
     app.add_handler(CommandHandler("skill_servidor", autorizados_apenas(server.server_cmd)))
+    # Callbacks do painel inline de servidor (botões srv:*)
+    app.add_handler(CallbackQueryHandler(autorizados_apenas(server.server_callback), pattern="^srv:"))
 
     # Atalhos de personas
     from agent.persona_registry import PERSONAS
