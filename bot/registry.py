@@ -1,7 +1,7 @@
 from telegram.ext import CommandHandler, MessageHandler, filters
 
 from bot.middleware import autorizados_apenas
-from bot.modules import core, rpg, admin, chat, monitoring, persona, model, productivity, concurso
+from bot.modules import core, rpg, admin, chat, monitoring, persona, model, productivity, concurso, server
 from telegram import BotCommand, BotCommandScopeAllPrivateChats, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler
 
@@ -54,7 +54,7 @@ def registrar(app):
     app.add_handler(CommandHandler("start",          autorizados_apenas(core.start)))
     app.add_handler(CommandHandler("ajuda",          autorizados_apenas(core.ajuda)))
     app.add_handler(CommandHandler("status",         autorizados_apenas(core.status)))
-    app.add_handler(CommandHandler("status_server",  autorizados_apenas(core.status_server)))
+    app.add_handler(CommandHandler("status_server",  autorizados_apenas(server.status_server_cmd)))  # alias → painel /server
     app.add_handler(CommandHandler("update",         autorizados_apenas(admin.update)))
     app.add_handler(CommandHandler("memoria",        autorizados_apenas(core.memoria)))
     app.add_handler(CommandHandler("memoria_limpar", autorizados_apenas(core.memoria_limpar)))
@@ -62,12 +62,13 @@ def registrar(app):
     # --- Módulo RPG ---
     app.add_handler(CommandHandler("rpg_transcrever", autorizados_apenas(rpg.rpg_transcrever)))
     app.add_handler(CommandHandler("rpg_resumo",      autorizados_apenas(rpg.rpg_resumo)))
-    app.add_handler(CommandHandler("logs",            autorizados_apenas(monitoring.logs)))
+    app.add_handler(CommandHandler("logs",            autorizados_apenas(server.logs_cmd)))           # alias → painel /server
     app.add_handler(CommandHandler("persona",         autorizados_apenas(persona.persona_cmd)))
     app.add_handler(CommandHandler("modelo",          autorizados_apenas(model.modelo_cmd)))
-    
-    # Callbacks
-    app.add_handler(CallbackQueryHandler(autorizados_apenas(model.set_model_callback), pattern="^set_model:"))
+
+    # Callbacks inline
+    app.add_handler(CallbackQueryHandler(autorizados_apenas(model.set_model_callback),    pattern="^set_model:"))
+    app.add_handler(CallbackQueryHandler(autorizados_apenas(persona.set_persona_callback), pattern="^set_persona:"))
     
     # --- Produtividade ---
     app.add_handler(CommandHandler("nota",        autorizados_apenas(productivity.nota)))
@@ -80,11 +81,9 @@ def registrar(app):
     app.add_handler(CommandHandler("concurso",    autorizados_apenas(concurso.concurso_cmd)))
 
     # --- Infraestrutura ---
-    from bot.modules import server
     app.add_handler(CommandHandler("server",         autorizados_apenas(server.server_cmd)))
     app.add_handler(CommandHandler("servidor",       autorizados_apenas(server.server_cmd)))
     app.add_handler(CommandHandler("skill_servidor", autorizados_apenas(server.server_cmd)))
-    # Callbacks do painel inline de servidor (botões srv:*)
     app.add_handler(CallbackQueryHandler(autorizados_apenas(server.server_callback), pattern="^srv:"))
 
     # Atalhos de personas
